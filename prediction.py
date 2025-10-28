@@ -114,8 +114,14 @@ if __name__ == "__main__":
             obs = torch.tensor(s.observation_tensor()).reshape(g.observation_tensor_shape())
             obs = obs.unsqueeze(0)  # batch of 1
             policy, value = prediction_net.policy_value(obs)
-            policy = torch.flatten(policy).detach().cpu().numpy()[s.legal_actions()]
+            policy = torch.flatten(policy).detach().cpu().numpy()
+            print('full policy', policy)
+            policy = policy[s.legal_actions()]
             policy = policy/np.sum(policy)
+            print('restricted policy', policy)
             action = np.random.choice(s.legal_actions(), p=policy)
+            print('action choice', action)
             s.apply_action(action)
+
         print(s)
+        print()
