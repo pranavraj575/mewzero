@@ -4,10 +4,8 @@ for examples of config files, look in beehavior/networks/configs
 supported FFN layers, CNN layers, and dictionary netowrks (for when input space is a dictionary of multiple images/vectors)
 """
 import numpy as np
-import torch
 from torch import nn
 import ast
-import gymnasium as gym
 
 
 def layer_from_config_dict(dic, input_shape=None, only_shape=False, device=None):
@@ -17,7 +15,7 @@ def layer_from_config_dict(dic, input_shape=None, only_shape=False, device=None)
     Args:
         dic: layer config dict
         {
-            'type':type of layer (REQUIRED)
+            'type': type of layer (REQUIRED)
             'other parameters': other values
         }
         examples:
