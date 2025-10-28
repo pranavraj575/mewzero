@@ -1,0 +1,87 @@
+{
+    'input_shape': (8, 240, 320),
+    'layers':
+        [
+            {
+                'type': 'maxpool',
+                'kernel': (2, 2),
+                'stride': (2, 2),
+            },
+            {
+                'type': 'CNN',
+                'channels': 16,
+                'kernel': (5, 5),
+                'stride': (3, 3),
+                'padding': (0, 0),
+            },
+            {
+                'type': 'ReLU',
+            },
+            {
+                'type': 'maxpool',
+                'kernel': (2, 2),
+                'stride': (2, 2),
+            },
+            {
+                'type': 'flatten',
+            },
+            {
+             'type':'linear',
+             'out_features':128,
+             'bias':False,
+            },
+            {
+                'type': 'ReLU',
+            },
+            {
+             'type':'split',
+             'branches':[
+                [
+                    {
+                     'type':'linear',
+                     'out_features':64,
+                     'bias':False,
+                    },
+                    {
+                        'type': 'ReLU',
+                    },
+                    {
+                     'type':'linear',
+                     'out_features':69,
+                     'bias':False,
+                    },
+                    {
+                        'type': 'ReLU',
+                    },
+                    {
+                     'type':'split',
+                     'branches':[
+                        [
+                            {
+                             'type':'linear',
+                             'out_features':6,
+                             'bias':False,
+                            },
+                        ],
+                        [
+                            {
+                             'type':'linear',
+                             'out_features':9,
+                             'bias':False,
+                            },
+                        ],
+                     ],
+                    },
+
+                ],
+                [
+                    {
+                     'type':'linear',
+                     'out_features':1,
+                     'bias':False,
+                    },
+                ],
+             ]
+            },
+        ],
+}

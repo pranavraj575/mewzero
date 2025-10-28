@@ -8,7 +8,7 @@ in continuous muzero, a is also an abstract action
 
 training using rollout, no enforced consistency:
     rollout produces (s'0,a'1,u1),(s'1,a'2,u2),...
-        ui are the immediate rewards at each timestep (scalar for single player, can be vector for multiplayer games)
+        ui are the immediate rewards at each timestep (scalar for single/double player, can be vector for multiplayer games)
         s'i,a'i are the true states/actions
     define s0=enc(s'0) as the encoded s'0, ai as encoded a'i (ai=a'i for nomral muzero),
         and use the dynamics function T to produce s{i+1},r{i+1} = T(si,a{i+1})

@@ -1,7 +1,9 @@
 """
 build a neural network from config files
-for examples of config files, look in beehavior/networks/configs
+for examples of config files, look in net_configs
 supported FFN layers, CNN layers, and dictionary netowrks (for when input space is a dictionary of multiple images/vectors)
+also supports 'split' - allows for splitting into multiple heads (i.e. policy, value)
+    returns a tuple of tensors when passed into CustomNN
 """
 import numpy as np
 from torch import nn
@@ -63,12 +65,14 @@ def layer_from_config_dict(dic, input_shape=None, only_shape=False, device=None)
                                )
         # INCLUSIVE of end dim
         if input_shape is not None:
-            # convert to batched first
-            input_shape = [1] + list(input_shape)
+            # convert to batched first to make this less annoying (+1s everywhere)
+            input_shape = [-1] + list(input_shape)
             shape = (*(input_shape[:start_dim]),
                      np.prod(input_shape[start_dim:end_dim])*input_shape[end_dim],
                      *((input_shape[end_dim:])[1:]),  # do this to avoid issues with end_dim=-1
                      )
+            # remove the batched shape
+            shape = shape[1:]
         else:
             shape = None
     elif typ == 'linear':
@@ -88,7 +92,6 @@ def layer_from_config_dict(dic, input_shape=None, only_shape=False, device=None)
     # image stuff has annoying output shape calculation
     # only need to write it once
     elif typ in ['cnn', 'maxpool', 'avgpool']:
-        print(input_shape)
         (C, H, W) = input_shape
         kernel_size = dic['kernel']
         if type(kernel_size) == int: kernel_size = (kernel_size, kernel_size)
@@ -136,31 +139,6 @@ def layer_from_config_dict(dic, input_shape=None, only_shape=False, device=None)
     return layer, shape
 
 
-def layers_from_config_list(dic_list, input_shape, only_shape=False, device=None):
-    """
-    returns list of layers from a list of config dicts
-        calculates each successive input shape automatically
-    repeatedly calls layer_from_config_dict
-    Args:
-        dic_list: list of layer config dicts
-        input_shape: BATCHED shape of input to dict,
-         probably required unless network is weird
-        only_shape: only calculate shapes, do not make networks
-    Returns:
-        list of layers, output shape
-    """
-    layers = []
-    shape = input_shape
-    for dic in dic_list:
-        layer, shape = layer_from_config_dict(dic=dic,
-                                              input_shape=shape,
-                                              only_shape=only_shape,
-                                              device=device,
-                                              )
-        layers.append(layer)
-    return layers, shape
-
-
 class CustomNN(nn.Module):
     """
     custom network built with config file
@@ -183,19 +161,44 @@ class CustomNN(nn.Module):
         super().__init__()
         assert "layers" in structure
         assert "input_shape" in structure
-        layers, output_shape = layers_from_config_list(dic_list=structure['layers'],
-                                                       input_shape=structure['input_shape'],
-                                                       only_shape=False,
-                                                       device=device)
+        shape = structure['input_shape']
+        layers = []
+        heads = []
+        for dic in structure['layers']:
+            if dic['type'] == 'split':
+                assert 'branches' in dic
+                for layer_lists in dic['branches']:
+                    substrucure = {
+                        'input_shape': shape,
+                        'layers': layer_lists
+                    }
+                    heads.append(CustomNN(structure=substrucure, device=device))
+            else:
+                layer, shape = layer_from_config_dict(dic=dic,
+                                                      input_shape=shape,
+                                                      only_shape=False,
+                                                      device=device,
+                                                      )
+                layers.append(layer)
 
         self.network = nn.Sequential(*layers)
+        self.heads = None
+        if heads:
+            self.heads = nn.ModuleList(heads)
+            self.output_shape = tuple(head.output_shape for head in self.heads)
+        else:
+            self.output_shape = shape
 
     def forward(self, observations):
-        return self.network(observations)
+        if self.heads is None:
+            return self.network(observations)
+        else:
+            pre_head = self.network(observations)
+            return tuple(head(pre_head) for head in self.heads)
 
 
 if __name__ == '__main__':
-    import os
+    import os, torch
 
     print(layer_from_config_dict(dic={'type': 'relu', }))
     print(layer_from_config_dict(dic={'type': 'flatten', 'start_dim': 2, 'end_dim': 4},
@@ -233,7 +236,37 @@ if __name__ == '__main__':
 
     print()
     print(net)
+    print(net(torch.rand((24, 8, 240, 320))).shape)
+    print(net.output_shape)
 
     print('params')
     for p in net.parameters():
         print(p.shape)
+
+    print("TESTING SPLIT NETWORK")
+    f = open(os.path.join(network_dir, 'net_configs', 'split_cnn.txt'), 'r')
+    split_cnn = ast.literal_eval(f.read())
+    f.close()
+    net = CustomNN(structure=split_cnn)
+
+    print()
+    print(net)
+    print("OUTPUT SHAPES:")
+    print(tuple(output.shape for output in net(torch.rand((24, 8, 240, 320)))))
+    print(net.output_shape)
+
+    print("TESTING DOUBLE SPLIT NETWORK")
+    f = open(os.path.join(network_dir, 'net_configs', 'double_split_cnn.txt'), 'r')
+    double_split_cnn = ast.literal_eval(f.read())
+    f.close()
+    net = CustomNN(structure=double_split_cnn)
+
+    print()
+    print(net)
+    print("OUTPUT SHAPES:")
+    output = net(torch.rand((24, 8, 240, 320)))
+    print(((output[0][0].shape, output[0][1].shape), output[1].shape))
+    print(net.output_shape)
+    n1 = nn.Linear(3, 5, device=None)
+    n2 = nn.Linear(3, 5, device=None)
+    print(torch.cuda.is_available())
