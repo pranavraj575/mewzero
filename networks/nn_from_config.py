@@ -10,7 +10,7 @@ from torch import nn
 import ast
 
 
-def layer_from_config_dict(dic, input_shape=None, only_shape=False, device=None):
+def layer_from_config_dict(dic, input_shape=None, only_shape=False):
     """
     returns nn layer from a layer config dict
     handles Linear, flatten, relu, tanh, cnn, maxpool, avgpool, dropout, identity
@@ -51,10 +51,10 @@ def layer_from_config_dict(dic, input_shape=None, only_shape=False, device=None)
         if not only_shape: layer = nn.Tanh()
         shape = input_shape
     elif typ == 'dropout':
-        if not only_shape: layer = nn.Dropout(dic.get('p', .1))
+        if not only_shape: layer = nn.Dropout(dic.get('p', .5))
         shape = input_shape
     elif typ == 'dropout2d':
-        if not only_shape: layer = nn.Dropout2d(dic.get('p', .1))
+        if not only_shape: layer = nn.Dropout2d(dic.get('p', .5))
         shape = input_shape
     elif typ == 'flatten':
         start_dim = dic.get('start_dim', 1)
@@ -80,7 +80,6 @@ def layer_from_config_dict(dic, input_shape=None, only_shape=False, device=None)
         if not only_shape:
             layer = nn.Linear(in_features=input_shape[-1],
                               out_features=out_features,
-                              device=device,
                               bias=dic.get('bias', True),
                               )
         if input_shape is not None:
@@ -93,7 +92,7 @@ def layer_from_config_dict(dic, input_shape=None, only_shape=False, device=None)
     # only need to write it once
     elif typ in ['cnn', 'maxpool', 'avgpool']:
         (C, H, W) = input_shape
-        kernel_size = dic['kernel']
+        kernel_size = dic['kernel_size']
         if type(kernel_size) == int: kernel_size = (kernel_size, kernel_size)
         stride = dic.get('stride', 1)
         if type(stride) == int: stride = (stride, stride)
@@ -112,7 +111,6 @@ def layer_from_config_dict(dic, input_shape=None, only_shape=False, device=None)
                     kernel_size=kernel_size,
                     stride=stride,
                     padding=padding,
-                    device=device,
                 )
             shape = (out_channels, Hp, Wp)
         elif typ == 'maxpool':
@@ -147,7 +145,6 @@ class CustomNN(nn.Module):
 
     def __init__(self,
                  structure,
-                 device=None,
                  ):
         """
         Args:
@@ -172,12 +169,11 @@ class CustomNN(nn.Module):
                         'input_shape': shape,
                         'layers': layer_lists
                     }
-                    heads.append(CustomNN(structure=substrucure, device=device))
+                    heads.append(CustomNN(structure=substrucure))
             else:
                 layer, shape = layer_from_config_dict(dic=dic,
                                                       input_shape=shape,
                                                       only_shape=False,
-                                                      device=device,
                                                       )
                 layers.append(layer)
 
@@ -215,7 +211,7 @@ if __name__ == '__main__':
     print(layer_from_config_dict(
         dic={'type': 'CNN',
              'channels': 64,
-             'kernel': (9, 8),
+             'kernel_size': (9, 8),
              'stride': (3, 2),
              'padding': (0, 1),
              },
@@ -223,7 +219,7 @@ if __name__ == '__main__':
     ))
     print(layer_from_config_dict(
         dic={'type': 'maxpool',
-             'kernel': (2, 2),
+             'kernel_size': (2, 2),
              'stride': (2, 2),
              },
         input_shape=(128, 400, 400),
@@ -266,7 +262,4 @@ if __name__ == '__main__':
     print("OUTPUT SHAPES:")
     output = net(torch.rand((24, 8, 240, 320)))
     print(((output[0][0].shape, output[0][1].shape), output[1].shape))
-    print(net.output_shape)
-    n1 = nn.Linear(3, 5, device=None)
-    n2 = nn.Linear(3, 5, device=None)
-    print(torch.cuda.is_available())
+
