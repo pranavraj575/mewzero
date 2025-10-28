@@ -22,6 +22,10 @@ Identity, ReLU, Tanh torch layers respectively.
 
 These layers require no additional dictionary keys, and do not change the network shape
 
+### `softmax`
+The Softmax torch layer.
+* `dim`: optional parameter with default `"dim": -1`, probability of element to be zeroed
+
 ### `dropout`, `dropout2d`
 The Dropout and Dropout2D torch layers respectively.
 * `p`: optional parameter with default `"p": 0.5`, probability of element to be zeroed
@@ -53,3 +57,5 @@ Splits network into branches, computed independently
 An example of this is in `net_configs/split_cnn.txt`.
 A example of splitting multiple times is in `net_configs/double_split_cnn.txt`
 
+The input for each branch will be the output of the layer immediately before it.
+This is why we do not need to specify the input shape.

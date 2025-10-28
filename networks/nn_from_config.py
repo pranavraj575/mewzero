@@ -50,6 +50,9 @@ def layer_from_config_dict(dic, input_shape=None, only_shape=False):
     elif typ == 'tanh':
         if not only_shape: layer = nn.Tanh()
         shape = input_shape
+    elif typ == 'softmax':
+        if not only_shape: layer = nn.Softmax(dim=dic.get('dim', -1))
+        shape = input_shape
     elif typ == 'dropout':
         if not only_shape: layer = nn.Dropout(dic.get('p', .5))
         shape = input_shape
@@ -262,4 +265,3 @@ if __name__ == '__main__':
     print("OUTPUT SHAPES:")
     output = net(torch.rand((24, 8, 240, 320)))
     print(((output[0][0].shape, output[0][1].shape), output[1].shape))
-

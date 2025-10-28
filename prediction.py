@@ -25,11 +25,11 @@ class Prediction(nn.Module):
     def __init__(self):
         super().__init__()
 
-    def value_only(self, states):
-        raise NotImplementedError
-
     def policy_only(self, states):
-        raise NotImplementedError
+        return self.policy_value(states)[0]
+
+    def value_only(self, states):
+        return self.policy_value(states)[1]
 
     def policy_value(self, states):
         """
@@ -56,12 +56,66 @@ class MuZeroPrediction(Prediction):
     finite action space
     """
 
-    def __init__(self, network_config, num_actions=None, device=None):
+    def __init__(self, network_config):
         """
         :param network_config:
             produces a network (see nn_from_config) that returns (policy, value)
             this parameter will imply the num actions, as this will be the size of the policy vector
-        :param num_actions:
         """
         super().__init__()
-        self.network = CustomNN(structure=network_config, device=device)
+        self.network = CustomNN(structure=network_config)
+        self.num_actions = self.network.output_shape[0]
+
+    def policy_value(self, states):
+        return self.network(states)
+
+
+if __name__ == "__main__":
+    import torch, pyspiel, numpy as np
+
+    g = pyspiel.load_game("tic_tac_toe")
+    network_config = {
+        'input_shape': tuple(g.observation_tensor_shape()),
+        'layers': [
+            {'type': 'flatten'},
+            {
+                "type": "linear",
+                "out_features": 64,
+            },
+            {'type': 'relu'},
+            {
+                "type": 'split',
+                'branches': [
+                    [  # policy head
+                        {
+                            "type": "linear",
+                            "out_features": g.num_distinct_actions(),
+                        },
+                        {
+                            "type": "softmax",
+                        },
+                    ],
+                    [  # value head
+                        {
+                            "type": "linear",
+                            "out_features": g.num_players(),
+                        },
+                    ],
+                ]
+            },
+        ]
+    }
+    prediction_net = MuZeroPrediction(network_config=network_config)
+    s = g.new_initial_state()
+    while not s.is_terminal():
+        if s.is_chance_node():
+            s.apply_action(np.random.choice(s.legal_actions()))
+        else:
+            obs = torch.tensor(s.observation_tensor()).reshape(g.observation_tensor_shape())
+            obs = obs.unsqueeze(0)  # batch of 1
+            policy, value = prediction_net.policy_value(obs)
+            policy = torch.flatten(policy).detach().cpu().numpy()[s.legal_actions()]
+            policy = policy/np.sum(policy)
+            action = np.random.choice(s.legal_actions(), p=policy)
+            s.apply_action(action)
+        print(s)
