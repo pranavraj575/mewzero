@@ -22,6 +22,7 @@ from networks.nn_from_config import CustomNN
 
 
 class Prediction(nn.Module):
+    finite_action_space=False
     def __init__(self):
         super().__init__()
 
@@ -55,7 +56,7 @@ class MuZeroPrediction(Prediction):
     fixed state representation (i.e. shaped tensor)
     finite action space
     """
-
+    finite_action_space = True
     def __init__(self, network_config):
         """
         :param network_config:

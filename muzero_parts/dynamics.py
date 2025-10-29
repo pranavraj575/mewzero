@@ -17,10 +17,9 @@ training using rollout, no enforced consistency:
 training with enforced consistency:
     same scenario, except we also enforce that for s,_ = T(enc(s'{i-i}),ai), s \approx enc(s'i)
 """
-from torch import nn
 
 
-class MuZeroDynamics(nn.Module):
+class MuZeroDynamics:
     def __init__(self):
         super().__init__()
 
@@ -36,7 +35,7 @@ class MuZeroDynamics(nn.Module):
         """
         raise NotImplementedError
 
-    def consistency_loss(self, state_encoder, true_states, actions, true_next_states, ):
+    def consistency_loss(self, state_encoder, true_state, action, true_next_state, ):
         pass
 
 
