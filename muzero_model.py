@@ -34,6 +34,6 @@ class MuZeroModel:
             else:
                 raise NotImplementedError
                 actions = self.prediction.sample_actions(state=abs_state, n=1)
-        self.action_enc_dec.decode(state=true_state,
-                                   action=action,
-                                   )
+        return self.action_enc_dec.decode(state=true_state,
+                                          action=action,
+                                          )
