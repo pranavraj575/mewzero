@@ -66,6 +66,7 @@ class MuZeroPrediction(Prediction):
         super().__init__()
         self.network = CustomNN(structure=network_config)
         self.num_actions = self.network.output_shape[0]
+        self.unbatched_input_shape=network_config['input_shape']
 
     def policy_value(self, state):
         return self.network(state)

@@ -42,7 +42,7 @@ class PyspielObservationRepreseentation(MuzeroRepresentation):
         if type(state) == list:
             return torch.stack([self.encode_single(s) for s in state], dim=0)
         else:
-            return self.encode_single(state)
+            return self.encode_single(state).unsqueeze(dim=0)
 
     def encode_single(self, state):
         if self.obs_shape is None:
