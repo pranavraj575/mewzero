@@ -195,7 +195,6 @@ class CustomNN(nn.Module):
             pre_head = self.network(observations)
             return tuple(head(pre_head) for head in self.heads)
 
-
 if __name__ == '__main__':
     import os, torch
 
