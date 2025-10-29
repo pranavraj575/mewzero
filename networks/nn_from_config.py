@@ -148,6 +148,7 @@ class CustomNN(nn.Module):
 
     def __init__(self,
                  structure,
+                 combine_heads='tuple',
                  ):
         """
         Args:
@@ -156,6 +157,7 @@ class CustomNN(nn.Module):
                 can also put in None, then enter config file
                 (input_shape -> unbatched original input shape
                 layers -> list of dicts for each layer)
+            combine_heads: how to combine multiple output heads, by default returns a tuple
 
         """
         super().__init__()
@@ -164,15 +166,38 @@ class CustomNN(nn.Module):
         shape = structure['input_shape']
         layers = []
         heads = []
-        for dic in structure['layers']:
+        for i,dic in enumerate(structure['layers']):
             if dic['type'] == 'split':
                 assert 'branches' in dic
-                for layer_lists in dic['branches']:
+                comb = dic.get('combination', 'tuple')
+                if comb == 'tuple':
+                    if not i==len(structure['layers'])-1:
+                        raise Exception("a split layer with 'combination':'tuple' must be the last layer in a network")
+                    for layer_lists in dic['branches']:
+                        substrucure = {
+                            'input_shape': shape,
+                            'layers': layer_lists,
+                        }
+                        heads.append(CustomNN(structure=substrucure))
+                elif comb == 'sum':
+                    small_dic = dic.copy()
+                    small_dic['combination'] = 'tuple'
                     substrucure = {
                         'input_shape': shape,
-                        'layers': layer_lists
+                        'layers': [small_dic]
                     }
-                    heads.append(CustomNN(structure=substrucure))
+                    summer = CustomNN(structure=substrucure, combine_heads='sum')
+                    layers.append(summer)
+                    shape = summer.output_shape
+            elif dic['type'] == 'repeat':
+                for _ in range(dic['times']):
+                    substrucure = {
+                        'input_shape': shape,
+                        'layers': dic['block']
+                    }
+                    block = CustomNN(structure=substrucure)
+                    layers.append(block)
+                    shape = block.output_shape
             else:
                 layer, shape = layer_from_config_dict(dic=dic,
                                                       input_shape=shape,
@@ -184,7 +209,13 @@ class CustomNN(nn.Module):
         self.heads = None
         if heads:
             self.heads = nn.ModuleList(heads)
-            self.output_shape = tuple(head.output_shape for head in self.heads)
+            self.combine_heads = combine_heads
+            if self.combine_heads == 'tuple':
+                self.output_shape = tuple(head.output_shape for head in self.heads)
+            elif self.combine_heads == 'sum':
+                self.output_shape = self.heads[0].output_shape
+            else:
+                raise Exception('combination type unknown:', combine_heads)
         else:
             self.output_shape = shape
 
@@ -193,7 +224,13 @@ class CustomNN(nn.Module):
             return self.network(observations)
         else:
             pre_head = self.network(observations)
-            return tuple(head(pre_head) for head in self.heads)
+            if self.combine_heads == "tuple":
+                return tuple(head(pre_head) for head in self.heads)
+            elif self.combine_heads == "sum":
+                return sum([head(pre_head) for head in self.heads])
+            else:
+                raise Exception('combination type unknown:', self.combine_heads)
+
 
 if __name__ == '__main__':
     import os, torch
@@ -264,3 +301,15 @@ if __name__ == '__main__':
     print("OUTPUT SHAPES:")
     output = net(torch.rand((24, 8, 240, 320)))
     print(((output[0][0].shape, output[0][1].shape), output[1].shape))
+
+    print("TESTING RESNET")
+    f = open(os.path.join(network_dir, 'net_configs', 'resnet.txt'), 'r')
+    resnet = ast.literal_eval(f.read())
+    f.close()
+    net = CustomNN(structure=resnet)
+
+    print()
+    print(net)
+    print("OUTPUT SHAPES:")
+    output = net(torch.rand((24, 10)))
+    print(output.shape)

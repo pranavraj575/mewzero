@@ -22,30 +22,23 @@ from networks.nn_from_config import CustomNN
 
 
 class Prediction(nn.Module):
-    finite_action_space=False
+    finite_action_space = False  # whether there is a fixed size action space
+    num_actions = -1  # if finite_action_space, stores the size
+
     def __init__(self):
         super().__init__()
 
-    def policy_only(self, state):
-        return self.policy_value(state)[0]
+    def policy_only(self, states):
+        return self.policy_value(states)[0]
 
-    def value_only(self, state):
-        return self.policy_value(state)[1]
+    def value_only(self, states):
+        return self.policy_value(states)[1]
 
-    def policy_value(self, state):
+    def policy_value(self, states):
         """
         ONLY VALID FOR FINITE ACTION SPACES
-        :param state: state or batch of states
+        :param states: batch of states
         :return: (policy, value), both tensors, policy is in Delta(A), value is a real number or a vector
-        """
-        raise NotImplementedError
-
-    def sample_actions(self, state, n=1):
-        """
-        samples actions from probability distribution
-        :param state:
-        :param n: number of actions to sample
-        :return: batch of n actions
         """
         raise NotImplementedError
 
@@ -57,6 +50,7 @@ class MuZeroPrediction(Prediction):
     finite action space
     """
     finite_action_space = True
+
     def __init__(self, network_config):
         """
         :param network_config:
@@ -66,15 +60,31 @@ class MuZeroPrediction(Prediction):
         super().__init__()
         self.network = CustomNN(structure=network_config)
         self.num_actions = self.network.output_shape[0]
-        self.unbatched_input_shape=network_config['input_shape']
+        self.unbatched_input_shape = network_config['input_shape']
 
-    def policy_value(self, state):
-        return self.network(state)
+    def policy_value(self, states):
+        return self.network(states)
 
-    def sample_actions(self, state, n=1):
-        self.policy_only(state=state)
-        if n==1:
-            return
+
+class BadPrediction(Prediction):
+    """
+    predicts the uniform policy, and a value of zero always
+    """
+    finite_action_space = True
+
+    def __init__(self, num_actions, num_players):
+        """
+        :param num_actions: number of possible unique actions
+        :param num_players: number of players
+        """
+        super().__init__()
+        self.num_actions = num_actions
+        self.num_players = num_players
+
+    def policy_value(self, states):
+        return (torch.ones(self.num_actions)/self.num_actions,
+                torch.zeros(self.num_players))
+
 
 if __name__ == "__main__":
     import torch, pyspiel, numpy as np

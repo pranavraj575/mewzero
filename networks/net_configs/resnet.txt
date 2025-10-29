@@ -1,0 +1,41 @@
+{
+    'input_shape': (10,),
+    'layers':
+        [
+            {
+             'type':'linear',
+             'out_features':128,
+             'bias':True,
+            },
+            {'type':'relu'},
+            {
+             'type':'repeat',
+             'times':3,
+             'block':
+                [
+                  {
+                   'type':'split',
+                   'combination':'sum',
+                   'branches':
+                    [
+                        [{'type':'identity'},],
+                        [
+                        {
+                         'type':'linear',
+                         'out_features':128,
+                         'bias':False,
+                        },
+                        {'type':'relu'},
+                        {
+                         'type':'linear',
+                         'out_features':128,
+                         'bias':False,
+                        },
+                        ]
+                    ],
+                  },
+                  {'type':'relu'},
+                ],
+            }
+        ],
+}

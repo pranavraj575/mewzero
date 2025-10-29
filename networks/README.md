@@ -14,8 +14,10 @@ All layer dictionaries must contain `type`: name of layer type.
 
 Supported torch layer types include `identity`, `relu`, `tanh`, `dropout`, `flatten`, `linear`, `cnn`, `maxpool`, `avgpool`.
         
-There is also a special type `split`, which breaks the network into two parallel networks at a particular layer.
-This is useful for different heads (i.e. policy, value network)
+There are also special types.
+`split` breaks the network into two parallel networks at a particular layer, and can combine the results.
+This is useful for different heads (i.e. policy, value network), or for resnets to sum a computation with the identity map.
+`repeat` makes k copies of a block.
 
 ### `identity`, `relu`, `tanh`
 Identity, ReLU, Tanh torch layers respectively.
@@ -49,13 +51,24 @@ Conv2d, MaxPool2d, AvgPool2d torch layers respectively
 * `padding`: optional parameter with default `"padding": (0,0)`, padding to use
 
 ### `split`
-Splits network into branches, computed independently
-* `branches` REQUIRED parameter, list of lists of layer dictionaries.
+Splits network into branches, computed independently.
+* `branches`: REQUIRED parameter, list of lists of layer dictionaries.
   With k lists of layer dictionaries, the network will split into k branches, each computing the network associated with one of the branches.
-  The result will be a k-tuple of the outputs of each branch.
-  This is computed recursively, so splits can be repeatedly applied (though there is probably no reason to do this),
+* `combination`: optional parameter with default `"combination": "tuple"`.
+  Determines how to combine the results of branches.
+  * For `"tuple"`, the result will be a k-tuple of the outputs of each branch.
+    There cannot be any layers after a split into tuples (any necessary network depth must be put into each branch).
+  * For `"sum"`, the results of each branch will be summed.
+    For this, each branch MUST have the same output dimension.
+  
+This is computed recursively, so splits can be repeatedly applied (though there is probably no reason to do this).
 An example of this is in `net_configs/split_cnn.txt`.
-A example of splitting multiple times is in `net_configs/double_split_cnn.txt`
+A example of splitting multiple times is in `net_configs/double_split_cnn.txt`.
 
 The input for each branch will be the output of the layer immediately before it.
 This is why we do not need to specify the input shape.
+
+### `repeat`
+Repeats a block a certian number of times.
+* `block`: REQUIRED parameter, list of layer dictionaries to be repeatedly added.
+* `count`: REQUIRED parameter, number of times to repeat block.

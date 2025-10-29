@@ -16,6 +16,11 @@ training using rollout, no enforced consistency:
 
 training with enforced consistency:
     same scenario, except we also enforce that for s,_ = T(enc(s'{i-i}),ai), s \approx enc(s'i)
+
+NOTE: muzero has no idea in general whether an abstract state is terminal, and will keep searching past this
+    in the MCTS search (https://www.julian.ac/blog/2020/12/22/muzero-intuition/)
+        during training time "treat terminal states as absorbing" is what online posts say
+    not an issue for fixed depth games
 """
 
 
@@ -32,6 +37,8 @@ class MuZeroDynamics:
             next state is the predicted next state of the game. If state is abstract, next state is abstract,
             reward is a real number (or vector), the reward obtained (for each player) at this transition
             terminal is a boolean for if the game terminates
+                for learned dynamics, we will always return terminal=False,
+                    unless we are in a special scenario like fixed-depth games
         """
         raise NotImplementedError
 

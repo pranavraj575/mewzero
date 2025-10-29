@@ -24,7 +24,7 @@ class MuZeroModel:
             raise NotImplementedError
         else:
             if self.prediction.finite_action_space:
-                policy = self.prediction.policy_only(state=abs_state).flatten()
+                policy = self.prediction.policy_only(states=abs_state).flatten()
                 if legal_actions is None:
                     action = np.random.choice(np.arange(len(policy)), p=policy.detach().cpu().numpy())
                 else:
