@@ -11,19 +11,11 @@ class MuzeroRepresentation(nn.Module):
     def __init__(self):
         super().__init__()
 
-    def encode(self, states):
+    def encode(self, state):
         """
         encodes a batch of states
-        :param states: batch of states
-        :return: encoded batch of states
-        """
-        raise NotImplementedError
-
-    def encode_single(self, state):
-        """
-        encodes a single state, unbatched
-        :param state:
-        :return:
+        :param state: state or batch of states
+        :return: encoded state or encoded batch of states
         """
         raise NotImplementedError
 
@@ -39,15 +31,18 @@ class PyspielObservationRepreseentation(MuzeroRepresentation):
     def __init__(self, game=None):
         super().__init__()
         if game is None:
-            self.obs_shape=None
+            self.obs_shape = None
         else:
             self.obs_shape = game.observation_tensor_shape()
 
-    def encode(self, states):
+    def encode(self, state):
         """
         states will be a list of pyspiel state objects
         """
-        return torch.stack([self.encode_single(s) for s in states], dim=0)
+        if type(state) == list:
+            return torch.stack([self.encode_single(s) for s in state], dim=0)
+        else:
+            return self.encode_single(state)
 
     def encode_single(self, state):
         if self.obs_shape is None:

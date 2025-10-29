@@ -25,25 +25,25 @@ class Prediction(nn.Module):
     def __init__(self):
         super().__init__()
 
-    def policy_only(self, states):
-        return self.policy_value(states)[0]
+    def policy_only(self, state):
+        return self.policy_value(state)[0]
 
-    def value_only(self, states):
-        return self.policy_value(states)[1]
+    def value_only(self, state):
+        return self.policy_value(state)[1]
 
-    def policy_value(self, states):
+    def policy_value(self, state):
         """
-        ONLY VALID FOR DISCRETE FINITE ACTION SPACES
-        :param states: batch of states
+        ONLY VALID FOR FINITE ACTION SPACES
+        :param state: state or batch of states
         :return: (policy, value), both tensors, policy is in Delta(A), value is a real number or a vector
         """
         raise NotImplementedError
 
     def sample_actions(self, state, n=1):
         """
-        ONLY USEFUL IN INFINITE ACTION SPACES
         samples actions from probability distribution
         :param state:
+        :param n: number of actions to sample
         :return: batch of n actions
         """
         raise NotImplementedError
@@ -66,9 +66,13 @@ class MuZeroPrediction(Prediction):
         self.network = CustomNN(structure=network_config)
         self.num_actions = self.network.output_shape[0]
 
-    def policy_value(self, states):
-        return self.network(states)
+    def policy_value(self, state):
+        return self.network(state)
 
+    def sample_actions(self, state, n=1):
+        self.policy_only(state=state)
+        if n==1:
+            return
 
 if __name__ == "__main__":
     import torch, pyspiel, numpy as np

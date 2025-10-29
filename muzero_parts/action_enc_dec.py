@@ -14,21 +14,21 @@ class MuzeroActionEncDec(nn.Module):
     def __init__(self):
         super().__init__()
 
-    def encode(self, states, actions):
+    def encode(self, state, action):
         """
         encodes batch of real actions
-        :param states: batch of real states
-        :param actions: batch of real actions
-        :return: batch of encoded abstract actions
+        :param state: state or batch of real states
+        :param action: action or batch of real actions
+        :return: abstract action or batch of encoded abstract actions
         """
         raise NotImplementedError
 
-    def decode(self, states, actions):
+    def decode(self, state, action):
         """
         decodes batch of abstract actions
-        :param states: batch of real states
-        :param actions: batch of abstract actions
-        :return: batch of real actions
+        :param state: state or batch of real states
+        :param action: abstract action or batch of abstract actions
+        :return: action or batch of real actions
         """
         raise NotImplementedError
 
@@ -38,8 +38,8 @@ class IdentityActionEncDec(MuzeroActionEncDec):
     for when no encoding is necessary, we are using true actions in the abstract game
     """
 
-    def encode(self, states, actions):
-        return actions
+    def encode(self, state, action):
+        return action
 
-    def decode(self, states, actions):
-        return actions
+    def decode(self, state, action):
+        return action
