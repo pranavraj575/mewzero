@@ -2,6 +2,7 @@ import numpy as np
 import torch
 
 from muzero_parts.dynamics import Dynamics
+from muzero_parts.representation import MuzeroRepresentation
 
 
 class Node:
@@ -25,7 +26,11 @@ class AbsMCTS:
         'Qsa' -> matrix of size (num expanded actions, num players), node.data['Qsa'][action] is the returns expected for each player
         'Ns' -> total number of visits, equal to sum(node.data['Nsa'])
         'parent_action_idx' -> action index to go from parent to child
-
+    Optional keys:
+        'state' -> if specified, stores the state of each node instead of recalculating it from action sequences
+            trades computation for RAN space
+        'legal_action_mask' -> vector of size (num actions), ones where actions are legal and zero otherwise
+            This is used in Muzero, since only the root node needs to worry about illegal actions
         'returns' (required only for terminal nodes) -> immediate returns at a node
             if available for nonzero nodes, the value of moving to a node is calculated as
                 normal node's value + returns at the node
@@ -74,6 +79,7 @@ class AbsMCTS:
         """
         selection of the action to take after node
         we know that self.not_expanded(node) is False
+        if 'legal_action_mask' is in node.data, must restrict to only where this vector is 1
         :param node:
         :return:
         """
@@ -145,19 +151,7 @@ class AbsMCTS:
         self.backprop_childs_value(node, action_idx, v)
         return v + node.data.get('returns', 0)
 
-    def print_tree(self, root, state, dynamics):
-        print(root.data)
-        print(root.children)
-        print()
-        for action_idx, child in enumerate(root.children):
-            if child is not None:
-                new_state, _, _, _ = dynamics.predict(
-                    state=state,
-                    action=self.get_action(root, state=state, action_idx=action_idx),
-                    mutate=False)
-                self.print_tree(child, new_state, dynamics)
-
-    def getActionProb(self, state, num_sims, dynamics: Dynamics, player=0, temp=1):
+    def getActionProb(self, state, num_sims, dynamics: Dynamics, player=0, temp=1, root=None):
         """
         This function performs numMCTSSims simulations of MCTS starting from
         canonicalBoard.
@@ -166,7 +160,8 @@ class AbsMCTS:
             probs: a policy vector where the probability of the ith action is
                    proportional to Nsa[(s,a)]**(1./temp)
         """
-        root = self.make_root_node(state=state, player=player)
+        if root is None:
+            root = self.make_root_node(state=state, player=player)
         for _ in range(num_sims):
             self.search(root, state=state, dynamics=dynamics)
         counts = np.array([root.data['Nsa'][i] for i in range(len(root.children))])
@@ -219,7 +214,10 @@ class MCTS(AbsMCTS):
         return leaf
 
     def not_expanded(self, node):
-        return np.any(node.data['Nsa'] == 0)
+        if 'legal_action_mask' in node.data:
+            return np.any(np.logical_and(node.data['Nsa'] == 0, node.data['legal_action_mask'] == 1))
+        else:
+            return np.any(node.data['Nsa'] == 0)
 
     def simulate_rollout(self, state, dynamics: Dynamics):
         terminal = False
@@ -256,8 +254,13 @@ class MCTS(AbsMCTS):
         if self.is_pyspiel and state.is_chance_node():
             outcomes = state.chance_outcomes()
             return np.random.choice([a for a, p in outcomes], p=[p for a, p in outcomes])
-        # since we have that self.not_expanded(node) is False, node.data['Nsa'] are all nonzero
-        ucb = node.data['Qsa'][:, node.data['player']] + self.exploration_constant*np.sqrt(np.log(node.data['Ns'])/node.data['Nsa'])
+        # since we have that self.not_expanded(node) is False, node.data['Nsa'] are all at least 1, except in
+        #   places where the legal_action_mask is 0, which we ignore anyway. Thus, clipping is safe here
+        u = self.exploration_constant*np.sqrt(np.log(node.data['Ns'])/np.clip(node.data['Nsa'], 1., np.inf))
+        ucb = node.data['Qsa'][:, node.data['player']] + u
+        if 'legal_action_mask' in node.data:
+            illegal = np.argwhere(node.data['legal_action_mask'] == 0)
+            ucb[illegal] = -np.inf
         return np.argmax(ucb)
 
 
@@ -279,6 +282,13 @@ class AlphaZeroMCTS(MCTS):
         super().__init__(num_players, is_pyspiel=is_pyspiel, exploration_constant=exploration_constant)
         self.policy_value_map = policy_value_map
 
+    def restrict_policy(self, policy, legal_action_indices):
+        """
+        restricts torch policy vector to only indices with legal actions
+        """
+        policy = policy[legal_action_indices]
+        return policy/torch.sum(policy)
+
     def make_leaf_node(self, state, parent, parent_action_idx, terminal, **kwargs):
         if terminal:
             # do not produce a prior policy and value for terminal nodes
@@ -288,8 +298,9 @@ class AlphaZeroMCTS(MCTS):
                                           terminal=terminal,
                                           **kwargs)
         policy, value = self.policy_value_map(state)
-        policy = policy.flatten()[self.get_legal_actions(state=state)]
-        policy = policy/torch.sum(policy)
+        policy = self.restrict_policy(policy=policy.flatten(),
+                                      legal_action_indices=self.get_legal_actions(state=state)
+                                      )
         value = value.flatten()
         return super().make_leaf_node(state=state,
                                       parent=parent,
@@ -322,10 +333,66 @@ class AlphaZeroMCTS(MCTS):
     def select_action_idx(self, node, state):
         if self.is_pyspiel and state.is_chance_node():
             return super().select_action_idx(node=node, state=state)
-        # this changes because of experimental results for AlphaZero
+        # this changes because of experimental results for AlphaZero, we no longer need to worry about div 0 either
         u = self.exploration_constant*node.data['prior_policy']*np.sqrt(node.data['Ns'])/(1 + node.data['Nsa'])
         ucb = node.data['Qsa'][:, node.data['player']] + u
+        if 'legal_action_mask' in node.data:
+            illegal = np.argwhere(node.data['legal_action_mask'] == 0)
+            ucb[illegal] = -np.inf
         return np.argmax(ucb)
+
+
+class MuZeroMCTS(AlphaZeroMCTS):
+    """
+    very similar to Alphazero, except
+        We search over abstract states, so the input to getActionProb must be an abstract state
+        All moves are assumed to be legal, except for at the root of the search, where we have access to true state
+            Thus, get_legal_actions always returns range(self.num_distinct_actions)
+        There are generally no terminal nodes, as we rely on a learned dynamics model
+    """
+
+    def __init__(self, num_players, policy_value_map, num_distinct_actions, exploration_constant=np.sqrt(2)):
+        super().__init__(
+            num_players=num_players,
+            policy_value_map=policy_value_map,
+            is_pyspiel=False,
+            exploration_constant=exploration_constant,
+        )
+        self.num_distinct_actions = num_distinct_actions
+
+    def get_legal_actions(self, state):
+        return list(range(self.num_distinct_actions))
+
+    def make_leaf_node(self, state, parent, parent_action_idx, terminal, **kwargs):
+        """
+        maybe should store the state of the leaf
+        """
+        leaf = super().make_leaf_node(state=state,
+                                      parent=parent,
+                                      parent_action_idx=parent_action_idx,
+                                      terminal=terminal,
+                                      **kwargs)
+        leaf.data['state'] = state
+
+    def getActionProb(self, state, num_sims, dynamics: Dynamics, legal_action_indices=None, player=0, temp=1, root=None):
+        """
+        :param state: ABSTRACT state!!!
+        :param legal_action_indices: list of indices of legal actions
+            if none, assumes all actions are legal from root
+        same as in super, except adds a legal action mask to the root node
+        """
+        if legal_action_indices is not None and root is None:
+            root = self.make_root_node(state=state, player=player)
+            mask = np.zeros(self.num_distinct_actions)
+            mask[legal_action_indices] = 1.
+            root.data['legal_action_mask'] = mask
+        return super().getActionProb(state=state,
+                                     num_sims=num_sims,
+                                     dynamics=dynamics,
+                                     player=player,
+                                     temp=temp,
+                                     root=root
+                                     )
 
 
 if __name__ == '__main__':
