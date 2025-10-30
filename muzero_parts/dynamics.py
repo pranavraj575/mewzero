@@ -22,7 +22,7 @@ NOTE: muzero has no idea in general whether an abstract state is terminal, and w
         during training time "treat terminal states as absorbing" is what online posts say
     not an issue for fixed depth games
 """
-
+import numpy as np
 
 class Dynamics:
     def __init__(self):
@@ -64,7 +64,7 @@ class PyspielDynamics(Dynamics):
             new_state.apply_action(action)
         else:
             new_state = state.child(action)
-        return new_state, new_state.returns(), new_state.current_player(), new_state.is_terminal()
+        return new_state, np.array(new_state.returns()), new_state.current_player(), new_state.is_terminal()
 
 
 if __name__ == '__main__':

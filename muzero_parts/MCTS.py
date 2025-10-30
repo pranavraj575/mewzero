@@ -39,17 +39,20 @@ class AbsMCTS:
                 'terminal': False,
                 'dummy': True,
                 'Nsa': np.zeros(1),
-                'Qsa': np.zeros(1, self.num_players),
+                'Qsa': np.zeros((1, self.num_players)),
                 'player': -1,
                 'Ns': 0,
             }
         )
-
+        dummy_node.children = [None]  # will be set to [root] in make_leaf_node
         root = self.make_leaf_node(state=state, parent=dummy_node, parent_action_idx=0, root=True, **kwargs)
-        dummy_node.children = [root]
         return root
 
     def make_leaf_node(self, state, parent, parent_action_idx, **kwargs):
+        """
+        creates leaf node with state 'state' from taking parent_action_idx at parent
+        updates parent's children to include this node
+        """
         raise NotImplementedError
 
     def get_node_value(self, node):
@@ -128,6 +131,18 @@ class AbsMCTS:
         self.backprop_childs_value(node, action_idx, v)
         return v + node.data.get('returns', 0)
 
+    def print_tree(self, root, state, dynamics):
+        print(root.data)
+        print(root.children)
+        print()
+        for action_idx, child in enumerate(root.children):
+            if child is not None:
+                new_state, _, _, _ = dynamics.predict(
+                    state=state,
+                    action=self.get_action(root, state=state, action_idx=action_idx),
+                    mutate=False)
+                self.print_tree(child, new_state, dynamics)
+
     def getActionProb(self, state, num_sims, dynamics: Dynamics, player=0, temp=1):
         """
         This function performs numMCTSSims simulations of MCTS starting from
@@ -138,7 +153,7 @@ class AbsMCTS:
                    proportional to Nsa[(s,a)]**(1./temp)
         """
         root = self.make_root_node(state=state, player=player)
-        for i in range(num_sims):
+        for _ in range(num_sims):
             self.search(root, state=state, dynamics=dynamics)
         counts = np.array([root.data['Nsa'][i] for i in range(len(root.children))])
         if temp == 0:
@@ -148,6 +163,7 @@ class AbsMCTS:
             probs[bestA] = 1
             return probs
         counts = np.power(counts, 1./temp)
+        print('q vals', root.data['Qsa'][:, root.data['player']])
         return counts/np.sum(counts)
 
 
@@ -166,19 +182,21 @@ class MCTS(AbsMCTS):
     def get_action(self, node, state, action_idx):
         return self.get_legal_actions(state)[action_idx]
 
-    def make_leaf_node(self, state, parent, **kwargs):
-        children = self.get_legal_actions(state=state)
+    def make_leaf_node(self, state, parent, parent_action_idx, **kwargs):
+        legal_actions = self.get_legal_actions(state=state)
         default_data = {
             'terminal': False,
-            'Nsa': np.zeros(len(children)),
-            'Qsa': np.zeros(len(children), self.num_players),
+            'Nsa': np.zeros(len(legal_actions)),
+            'Qsa': np.zeros((len(legal_actions), self.num_players)),
             'player': 0,
             'Ns': 0,
+            'parent_action_idx': parent_action_idx,
         }
         default_data.update(kwargs)
-        root = Node(parent=parent, data=default_data)
-        root.children = children
-        return root
+        leaf = Node(parent=parent, data=default_data)
+        leaf.children = [None for _ in legal_actions]
+        parent.children[parent_action_idx] = leaf
+        return leaf
 
     def not_expanded(self, node):
         return np.any(node.data['Nsa'] == 0)
@@ -206,6 +224,7 @@ class MCTS(AbsMCTS):
                                    terminal=terminal,
                                    player=next_player,
                                    returns=returns,
+                                   parent_action_idx=action_idx,
                                    )
         if terminal:
             value = returns
@@ -226,6 +245,16 @@ class PyspielMCTS(MCTS):
 
 if __name__ == '__main__':
     import pyspiel
+    from muzero_parts.dynamics import PyspielDynamics
 
     game = pyspiel.load_game('tic_tac_toe')
+    state = game.new_initial_state()
+    state.apply_action(4)
+    state.apply_action(1)
+    state.apply_action(8)
+    state.apply_action(0)
+    state.apply_action(2)
+    print(state)
+    dynamics = PyspielDynamics()
     mcts = PyspielMCTS(num_players=2)
+    print(mcts.getActionProb(state=state, num_sims=10000, dynamics=dynamics, player=state.current_player(), temp=1))
