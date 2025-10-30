@@ -232,8 +232,12 @@ class MCTS(AbsMCTS):
     def expand_node_and_sim_value(self, node, state, dynamics: Dynamics):
         # dont need to mess with storing priors here, since this is simple MCTS
         # however, we do need a value estimate
+        if 'legal_action_mask' in node.data:
+            valid = np.logical_and(node.data['Nsa'] == 0, node.data['legal_action_mask'] == 1)
+            zeros = np.array(valid).flatten()
+        else:
+            zeros = np.array(np.argwhere(node.data['Nsa'] == 0)).flatten()
 
-        zeros = np.array(np.argwhere(node.data['Nsa'] == 0)).flatten()
         action_idx = np.random.choice(zeros)
         action = self.get_legal_actions(state=state)[action_idx]
         new_state, returns, next_player, terminal = dynamics.predict(state=state, action=action, mutate=False)
@@ -314,7 +318,11 @@ class AlphaZeroMCTS(MCTS):
         prior = node.data['prior_policy']
         # pick the maximizer of the prior, over the actions that have not been visited
         # use prior + 1 in case the prior is zero in some entries, though this should not happen
-        action_idx = np.argmax((prior + 1)*(node.data['Nsa'] == 0))
+        if 'legal_action_mask' in node.data:
+            valid = np.logical_and(node.data['Nsa'] == 0, node.data['legal_action_mask'] == 1)
+            action_idx = np.argmax((prior + 1)*valid)
+        else:
+            action_idx = np.argmax((prior + 1)*(node.data['Nsa'] == 0))
         action = self.get_legal_actions(state=state)[action_idx]
         new_state, returns, next_player, terminal = dynamics.predict(state=state, action=action, mutate=False)
         leaf = self.make_leaf_node(state=new_state,
