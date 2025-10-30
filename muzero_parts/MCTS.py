@@ -323,7 +323,7 @@ class AlphaZeroMCTS(MCTS):
         if self.is_pyspiel and state.is_chance_node():
             return super().select_action_idx(node=node, state=state)
         # this changes because of experimental results for AlphaZero
-        u = self.exploration_constant*node.data['prior_value']*np.sqrt(node.data['Ns'])/(1 + node.data['Nsa'])
+        u = self.exploration_constant*node.data['prior_policy']*np.sqrt(node.data['Ns'])/(1 + node.data['Nsa'])
         ucb = node.data['Qsa'][:, node.data['player']] + u
         return np.argmax(ucb)
 
