@@ -1,4 +1,6 @@
 import numpy as np
+import torch
+
 from muzero_parts.dynamics import Dynamics
 
 
@@ -45,10 +47,16 @@ class AbsMCTS:
             }
         )
         dummy_node.children = [None]  # will be set to [root] in make_leaf_node
-        root = self.make_leaf_node(state=state, parent=dummy_node, parent_action_idx=0, root=True, **kwargs)
+        root = self.make_leaf_node(state=state,
+                                   parent=dummy_node,
+                                   parent_action_idx=0,
+                                   terminal=False,
+                                   root=True,
+                                   **kwargs,
+                                   )
         return root
 
-    def make_leaf_node(self, state, parent, parent_action_idx, **kwargs):
+    def make_leaf_node(self, state, parent, parent_action_idx, terminal, **kwargs):
         """
         creates leaf node with state 'state' from taking parent_action_idx at parent
         updates parent's children to include this node
@@ -62,7 +70,7 @@ class AbsMCTS:
     def is_terminal(self, node):
         return node.data['terminal']
 
-    def select_action_idx(self, node):
+    def select_action_idx(self, node, state):
         """
         selection of the action to take after node
         we know that self.not_expanded(node) is False
@@ -126,7 +134,7 @@ class AbsMCTS:
                                        value=value)
             return value + node.data.get('returns', 0)
         # otherwise, we continue to one of the children
-        action_idx = self.select_action_idx(node)
+        action_idx = self.select_action_idx(node, state=state)
         child = node.children[action_idx]
         new_state = child.data.get('state', None)
         if new_state is None:
@@ -169,7 +177,6 @@ class AbsMCTS:
             probs[bestA] = 1
             return probs
         counts = np.power(counts, 1./temp)
-        print('q vals', root.data['Qsa'][:, root.data['player']])
         return counts/np.sum(counts)
 
 
@@ -179,19 +186,26 @@ class MCTS(AbsMCTS):
     simple version that is not guided by an expansion policy
     """
 
-    def __init__(self, num_players):
+    def __init__(self, num_players, is_pyspiel=False, exploration_constant=np.sqrt(2)):
+        """
+        :param is_pyspiel: whether every state is a pyspiel state
+        """
         super().__init__(num_players=num_players)
+        self.is_pyspiel = is_pyspiel
+        self.exploration_constant = exploration_constant
 
     def get_legal_actions(self, state):
+        if self.is_pyspiel:
+            return state.legal_actions()
         raise NotImplementedError
 
     def get_action(self, node, state, action_idx):
         return self.get_legal_actions(state)[action_idx]
 
-    def make_leaf_node(self, state, parent, parent_action_idx, **kwargs):
+    def make_leaf_node(self, state, parent, parent_action_idx, terminal, **kwargs):
         legal_actions = self.get_legal_actions(state=state)
         default_data = {
-            'terminal': False,
+            'terminal': terminal,
             'Nsa': np.zeros(len(legal_actions)),
             'Qsa': np.zeros((len(legal_actions), self.num_players)),
             'player': 0,
@@ -238,20 +252,85 @@ class MCTS(AbsMCTS):
             value = self.simulate_rollout(state=new_state, dynamics=dynamics)
         return leaf, value
 
-    def select_action_idx(self, node):
-        C = np.sqrt(2)
+    def select_action_idx(self, node, state):
+        if self.is_pyspiel and state.is_chance_node():
+            outcomes = state.chance_outcomes()
+            return np.random.choice([a for a, p in outcomes], p=[p for a, p in outcomes])
         # since we have that self.not_expanded(node) is False, node.data['Nsa'] are all nonzero
-        u = node.data['Qsa'][:, node.data['player']] + C*np.sqrt(np.log(node.data['Ns'])/node.data['Nsa'])
-        return np.argmax(u)
+        ucb = node.data['Qsa'][:, node.data['player']] + self.exploration_constant*np.sqrt(np.log(node.data['Ns'])/node.data['Nsa'])
+        return np.argmax(ucb)
 
 
-class PyspielMCTS(MCTS):
-    def get_legal_actions(self, state):
-        return state.legal_actions()
+class AlphaZeroMCTS(MCTS):
+    """
+    Alphazero version of MCTS guided by a policy/value
+    nodes now also store a prior policy (returned by policy_value_net)
+        'prior_policy': probability distribution over valid action indexes
+    """
+
+    def __init__(self, num_players, policy_value_map, is_pyspiel=False, exploration_constant=np.sqrt(2)):
+        """
+        :param num_players:
+        :param policy_value_map:
+            map from state -> (policy tensor, value tensor)
+                policy is over all possible actions, this is restricted to only legal actions and renormalized by self.create_leaf_node
+        :param is_pyspiel:
+        """
+        super().__init__(num_players, is_pyspiel=is_pyspiel, exploration_constant=exploration_constant)
+        self.policy_value_map = policy_value_map
+
+    def make_leaf_node(self, state, parent, parent_action_idx, terminal, **kwargs):
+        if terminal:
+            # do not produce a prior policy and value for terminal nodes
+            return super().make_leaf_node(state=state,
+                                          parent=parent,
+                                          parent_action_idx=parent_action_idx,
+                                          terminal=terminal,
+                                          **kwargs)
+        policy, value = self.policy_value_map(state)
+        policy = policy.flatten()[self.get_legal_actions(state=state)]
+        policy = policy/torch.sum(policy)
+        value = value.flatten()
+        return super().make_leaf_node(state=state,
+                                      parent=parent,
+                                      parent_action_idx=parent_action_idx,
+                                      terminal=terminal,
+                                      prior_policy=policy.detach().cpu().numpy(),
+                                      prior_value=value.detach().cpu().numpy(),
+                                      **kwargs)
+
+    def expand_node_and_sim_value(self, node, state, dynamics: Dynamics):
+        prior = node.data['prior_policy']
+        # pick the maximizer of the prior, over the actions that have not been visited
+        # use prior + 1 in case the prior is zero in some entries, though this should not happen
+        action_idx = np.argmax((prior + 1)*(node.data['Nsa'] == 0))
+        action = self.get_legal_actions(state=state)[action_idx]
+        new_state, returns, next_player, terminal = dynamics.predict(state=state, action=action, mutate=False)
+        leaf = self.make_leaf_node(state=new_state,
+                                   parent=node,
+                                   terminal=terminal,
+                                   player=next_player,
+                                   returns=returns,
+                                   parent_action_idx=action_idx,
+                                   )
+        if terminal:
+            value = returns
+        else:
+            value = leaf.data['prior_value']  # use evaluation instead of a full rollout
+        return leaf, value
+
+    def select_action_idx(self, node, state):
+        if self.is_pyspiel and state.is_chance_node():
+            return super().select_action_idx(node=node, state=state)
+        # this changes because of experimental results for AlphaZero
+        u = self.exploration_constant*node.data['prior_value']*np.sqrt(node.data['Ns'])/(1 + node.data['Nsa'])
+        ucb = node.data['Qsa'][:, node.data['player']] + u
+        return np.argmax(ucb)
 
 
 if __name__ == '__main__':
     import pyspiel
+    import torch
     from muzero_parts.dynamics import PyspielDynamics
 
     game = pyspiel.load_game('tic_tac_toe')
@@ -263,5 +342,9 @@ if __name__ == '__main__':
     state.apply_action(2)
     print(state)
     dynamics = PyspielDynamics()
-    mcts = PyspielMCTS(num_players=2)
+    num_actions = game.num_distinct_actions()
+    # alphazero version where the policy is always uniform over A, value is alwyas [0,0]
+    mcts = AlphaZeroMCTS(num_players=game.num_players(), is_pyspiel=True,
+                         policy_value_map=lambda state: (torch.ones(num_actions)/num_actions, torch.zeros(game.num_players()))
+                         )
     print(mcts.getActionProb(state=state, num_sims=10000, dynamics=dynamics, player=state.current_player(), temp=1))
