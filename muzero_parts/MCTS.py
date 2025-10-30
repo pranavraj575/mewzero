@@ -1,6 +1,4 @@
-import math
-
-import numpy as np, torch
+import numpy as np
 from muzero_parts.dynamics import Dynamics
 
 
