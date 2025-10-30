@@ -63,6 +63,12 @@ class AbsMCTS:
         return node.data['terminal']
 
     def select_action_idx(self, node):
+        """
+        selection of the action to take after node
+        we know that self.not_expanded(node) is False
+        :param node:
+        :return:
+        """
         raise NotImplementedError
 
     ### EXPANSION/simulation
@@ -233,8 +239,9 @@ class MCTS(AbsMCTS):
         return leaf, value
 
     def select_action_idx(self, node):
-        C = 1
-        u = node.data['Qsa'][:, node.data['player']] + C*np.sqrt(node.data['Ns'])/(1 + node.data['Nsa'])
+        C = np.sqrt(2)
+        # since we have that self.not_expanded(node) is False, node.data['Nsa'] are all nonzero
+        u = node.data['Qsa'][:, node.data['player']] + C*np.sqrt(np.log(node.data['Ns'])/node.data['Nsa'])
         return np.argmax(u)
 
 
