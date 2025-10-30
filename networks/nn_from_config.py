@@ -1,4 +1,5 @@
 """
+see readme for best description
 build a neural network from config files
 for examples of config files, look in net_configs
 supported FFN layers, CNN layers, and dictionary netowrks (for when input space is a dictionary of multiple images/vectors)
@@ -143,7 +144,6 @@ def layer_from_config_dict(dic, input_shape=None, only_shape=False):
 class CustomNN(nn.Module):
     """
     custom network built with config file
-    https://stable-baselines3.readthedocs.io/en/master/guide/custom_policy.html
     """
 
     def __init__(self,
@@ -166,12 +166,12 @@ class CustomNN(nn.Module):
         shape = structure['input_shape']
         layers = []
         heads = []
-        for i,dic in enumerate(structure['layers']):
+        for i, dic in enumerate(structure['layers']):
             if dic['type'] == 'split':
                 assert 'branches' in dic
                 comb = dic.get('combination', 'tuple')
                 if comb == 'tuple':
-                    if not i==len(structure['layers'])-1:
+                    if not i == len(structure['layers']) - 1:
                         raise Exception("a split layer with 'combination':'tuple' must be the last layer in a network")
                     for layer_lists in dic['branches']:
                         substrucure = {
@@ -311,5 +311,5 @@ if __name__ == '__main__':
     print()
     print(net)
     print("OUTPUT SHAPES:")
-    output = net(torch.rand((24, 10)))
+    output = net(torch.zeros((1, 10)))
     print(output.shape)

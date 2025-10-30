@@ -4,7 +4,7 @@
         [
             {
              'type':'linear',
-             'out_features':128,
+             'out_features':8,
              'bias':True,
             },
             {'type':'relu'},
@@ -22,13 +22,13 @@
                         [
                         {
                          'type':'linear',
-                         'out_features':128,
+                         'out_features':8,
                          'bias':False,
                         },
                         {'type':'relu'},
                         {
                          'type':'linear',
-                         'out_features':128,
+                         'out_features':8,
                          'bias':False,
                         },
                         ]

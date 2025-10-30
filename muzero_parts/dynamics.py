@@ -24,7 +24,7 @@ NOTE: muzero has no idea in general whether an abstract state is terminal, and w
 """
 
 
-class MuZeroDynamics:
+class Dynamics:
     def __init__(self):
         super().__init__()
 
@@ -33,9 +33,11 @@ class MuZeroDynamics:
         :param state: current (abstract or true) state of game
         :param action: (abstract or true) game action
         :param mutate: whether state is allowed to be mutated
-        :return: (next state, reward, terminal)
+        :return: (next state, reward, next_player, terminal)
             next state is the predicted next state of the game. If state is abstract, next state is abstract,
             reward is a real number (or vector), the reward obtained (for each player) at this transition
+            next_player is the index of next player
+                for most games this alternates between player 0 and player 1
             terminal is a boolean for if the game terminates
                 for learned dynamics, we will always return terminal=False,
                     unless we are in a special scenario like fixed-depth games
@@ -46,7 +48,7 @@ class MuZeroDynamics:
         pass
 
 
-class PyspielDynamics(MuZeroDynamics):
+class PyspielDynamics(Dynamics):
     """
     assumes state is a PySpiel state
     uses state.apply_action to produce next state
@@ -62,7 +64,7 @@ class PyspielDynamics(MuZeroDynamics):
             new_state.apply_action(action)
         else:
             new_state = state.child(action)
-        return new_state, new_state.returns(), new_state.is_terminal()
+        return new_state, new_state.returns(), new_state.current_player(), new_state.is_terminal()
 
 
 if __name__ == '__main__':
@@ -79,7 +81,7 @@ if __name__ == '__main__':
     dynamics = PyspielDynamics()
     sum_returns = np.zeros(3)
     while not terminal:
-        state, returns, terminal = dynamics.predict(state=state, action=np.random.choice(state.legal_actions()), mutate=True)
+        state, returns, player, terminal = dynamics.predict(state=state, action=np.random.choice(state.legal_actions()), mutate=True)
         sum_returns += returns
         print(state)
     print(sum_returns)

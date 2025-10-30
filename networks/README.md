@@ -1,8 +1,10 @@
 # Network generated from config file
 
-For examples of config files, look in net_configs.
+For examples of config dicts, look in net_configs.
+To generate a network given a dictionary, use `net = CustomNN(structure=config_dict)`.
+For example, `net = CustomNN(structure=ast.literal_eval(open(<config file>).read()))`
 
-Each config file is txt file containing a python dictionary.
+A valid configuration is a dictionary.
 The required keys are:
 
 * `input_shape`: the UNBATCHED input shape of the network
@@ -10,7 +12,7 @@ The required keys are:
 
 ## layer dictionaries
 
-All layer dictionaries must contain `type`: name of layer type.
+All layer dictionaries are REQUIRED to contain `type`: name of layer type.
 
 Supported torch layer types include `identity`, `relu`, `tanh`, `dropout`, `flatten`, `linear`, `cnn`, `maxpool`, `avgpool`.
         

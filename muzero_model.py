@@ -1,6 +1,6 @@
 import torch, numpy as np
 
-from muzero_parts.dynamics import MuZeroDynamics
+from muzero_parts.dynamics import Dynamics
 from muzero_parts.representation import MuzeroRepresentation
 from muzero_parts.action_enc_dec import MuzeroActionEncDec
 from muzero_parts.prediction import Prediction
@@ -10,7 +10,7 @@ class MuZeroModel:
     def __init__(self,
                  representation: MuzeroRepresentation,
                  action_enc_dec: MuzeroActionEncDec,
-                 dynamics: MuZeroDynamics,
+                 dynamics: Dynamics,
                  prediction: Prediction,
                  ):
         self.representation = representation
