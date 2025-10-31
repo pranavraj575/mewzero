@@ -155,7 +155,7 @@ class AbsMCTS:
         self.backprop_childs_value(node, action_idx, v)
         return v + node.data.get('returns', 0)
 
-    def getActionProb(self, state, num_sims, dynamics: Dynamics, player=0, temp=1, root=None, depth=float('inf')):
+    def get_mcts_policy_value(self, state, num_sims, dynamics: Dynamics, player=0, temp=1, root=None, depth=float('inf')):
         """
         runs num_sims of MCTS search and returns the action probabilities (based on visits of root children)
         Args:
@@ -169,15 +169,16 @@ class AbsMCTS:
             root = self.make_root_node(state=state, player=player)
         for _ in range(num_sims):
             self.search(root, state=state, dynamics=dynamics, depth=depth)
+        value = self.get_node_value(root)
         counts = np.array([root.data['Nsa'][i] for i in range(len(root.children))])
         if temp == 0:
             bestAs = np.array(np.argwhere(counts == np.max(counts))).flatten()
             bestA = np.random.choice(bestAs)
             probs = np.zeros_like(counts)
             probs[bestA] = 1
-            return probs
+            return probs,value
         counts = np.power(counts, 1./temp)
-        return counts/np.sum(counts)
+        return counts/np.sum(counts),value
 
 
 class MCTS(AbsMCTS):
@@ -388,7 +389,7 @@ class MuZeroMCTS(AlphaZeroMCTS):
         leaf.data['state'] = state
         return leaf
 
-    def getActionProb(self, state, num_sims, dynamics: Dynamics, legal_action_indices=None, player=0, temp=1, root=None, depth=float('inf')):
+    def get_mcts_policy_value(self, state, num_sims, dynamics: Dynamics, legal_action_indices=None, player=0, temp=1, root=None, depth=float('inf')):
         """
         :param state: ABSTRACT state!!!
         :param legal_action_indices: list of indices of legal actions
@@ -400,14 +401,14 @@ class MuZeroMCTS(AlphaZeroMCTS):
             mask = np.zeros(self.num_distinct_actions)
             mask[legal_action_indices] = 1.
             root.data['legal_action_mask'] = mask
-        return super().getActionProb(state=state,
-                                     num_sims=num_sims,
-                                     dynamics=dynamics,
-                                     player=player,
-                                     temp=temp,
-                                     root=root,
-                                     depth=depth,
-                                     )
+        return super().get_mcts_policy_value(state=state,
+                                             num_sims=num_sims,
+                                             dynamics=dynamics,
+                                             player=player,
+                                             temp=temp,
+                                             root=root,
+                                             depth=depth,
+                                             )
 
 
 if __name__ == '__main__':
@@ -429,4 +430,4 @@ if __name__ == '__main__':
     mcts = AlphaZeroMCTS(num_players=game.num_players(), is_pyspiel=True,
                          policy_value_map=lambda state: (torch.ones(num_actions)/num_actions, torch.zeros(game.num_players()))
                          )
-    print(mcts.getActionProb(state=state, num_sims=10000, dynamics=dynamics, player=state.current_player(), temp=1))
+    print(mcts.get_mcts_policy_value(state=state, num_sims=10000, dynamics=dynamics, player=state.current_player(), temp=1))
