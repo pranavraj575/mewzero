@@ -111,7 +111,7 @@ class AbsMCTS:
 
         node.data['Ns'] += 1
 
-    def search(self, node: Node, state, dynamics: Dynamics):
+    def search(self, node: Node, state, dynamics: Dynamics, depth=float('inf')):
         """
         This function performs one iteration of MCTS. It is recursively called
         till a leaf node is found. The action chosen at each node is one that
@@ -133,6 +133,10 @@ class AbsMCTS:
 
         if self.is_terminal(node):  # do not need to update node.data['Qsa'], so send the returns value to parent
             return node.data['returns']
+        if depth<=0:
+            # TODO: here, we stop and call an evaluation function
+            #  also we should split expand_node_and_sim_value into expand node, sim value
+            pass
         if self.not_expanded(node):
             child_node, value = self.expand_node_and_sim_value(node, state=state, dynamics=dynamics)
             self.backprop_childs_value(node=node,
@@ -147,15 +151,16 @@ class AbsMCTS:
             new_state, returns, next_player, _ = dynamics.predict(state=state,
                                                                   action=self.get_action(node, state=state, action_idx=action_idx),
                                                                   mutate=False)
-        v = self.search(node=child, state=new_state, dynamics=dynamics)
+        v = self.search(node=child, state=new_state, dynamics=dynamics, depth=depth - 1)
         self.backprop_childs_value(node, action_idx, v)
         return v + node.data.get('returns', 0)
 
-    def getActionProb(self, state, num_sims, dynamics: Dynamics, player=0, temp=1, root=None):
+    def getActionProb(self, state, num_sims, dynamics: Dynamics, player=0, temp=1, root=None, depth=float('inf')):
         """
-        This function performs numMCTSSims simulations of MCTS starting from
-        canonicalBoard.
-
+        runs num_sims of MCTS search and returns the action probabilities (based on visits of root children)
+        Args:
+            depth: if not infinity, only grows MCTS tree to a certian depth, and relies on the value function for leaves
+                this is useful in Muzero if we know the game has a certian max depth
         Returns:
             probs: a policy vector where the probability of the ith action is
                    proportional to Nsa[(s,a)]**(1./temp)
@@ -163,7 +168,7 @@ class AbsMCTS:
         if root is None:
             root = self.make_root_node(state=state, player=player)
         for _ in range(num_sims):
-            self.search(root, state=state, dynamics=dynamics)
+            self.search(root, state=state, dynamics=dynamics, depth=depth)
         counts = np.array([root.data['Nsa'][i] for i in range(len(root.children))])
         if temp == 0:
             bestAs = np.array(np.argwhere(counts == np.max(counts))).flatten()
@@ -381,8 +386,9 @@ class MuZeroMCTS(AlphaZeroMCTS):
                                       terminal=terminal,
                                       **kwargs)
         leaf.data['state'] = state
+        return leaf
 
-    def getActionProb(self, state, num_sims, dynamics: Dynamics, legal_action_indices=None, player=0, temp=1, root=None):
+    def getActionProb(self, state, num_sims, dynamics: Dynamics, legal_action_indices=None, player=0, temp=1, root=None, depth=float('inf')):
         """
         :param state: ABSTRACT state!!!
         :param legal_action_indices: list of indices of legal actions
@@ -399,7 +405,8 @@ class MuZeroMCTS(AlphaZeroMCTS):
                                      dynamics=dynamics,
                                      player=player,
                                      temp=temp,
-                                     root=root
+                                     root=root,
+                                     depth=depth,
                                      )
 
 
