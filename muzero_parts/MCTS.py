@@ -27,6 +27,8 @@ class AbsMCTS:
         'Ns' -> total number of visits, equal to sum(node.data['Nsa'])
         'parent_action_idx' -> action index to go from parent to child
     Optional keys:
+        'root' -> whether node is root, if unspecified, the node is not root
+        'dummy' -> whether node is dummy (parent of root)
         'state' -> if specified, stores the state of each node instead of recalculating it from action sequences
             trades computation for RAN space
         'legal_action_mask' -> vector of size (num actions), ones where actions are legal and zero otherwise
@@ -301,6 +303,12 @@ class AlphaZeroMCTS(MCTS):
         policy = policy[legal_action_indices]
         return policy/torch.sum(policy)
 
+    def add_direchlet_noise(self, policy):
+        eps = .25
+        dir = np.random.dirichlet(
+            np.zeros(len(policy),) + 0.3)
+        return policy*(1 - eps) + eps*dir
+
     def make_leaf_node(self, state, parent, parent_action_idx, terminal, **kwargs):
         if terminal:
             # do not produce a prior policy and value for terminal nodes
@@ -313,6 +321,9 @@ class AlphaZeroMCTS(MCTS):
         policy = self.restrict_policy(policy=policy.flatten(),
                                       legal_action_indices=self.get_legal_actions(state=state)
                                       )
+        if kwargs.get('root', False):
+            # add direchlet noise to the root
+            policy = self.add_direchlet_noise(policy=policy)
         value = value.flatten()
         return super().make_leaf_node(state=state,
                                       parent=parent,
