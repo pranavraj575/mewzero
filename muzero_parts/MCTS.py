@@ -133,7 +133,7 @@ class AbsMCTS:
 
         if self.is_terminal(node):  # do not need to update node.data['Qsa'], so send the returns value to parent
             return node.data['returns']
-        if depth<=0:
+        if depth <= 0:
             # TODO: here, we stop and call an evaluation function
             #  also we should split expand_node_and_sim_value into expand node, sim value
             pass
@@ -153,6 +153,8 @@ class AbsMCTS:
                                                                   mutate=False)
         v = self.search(node=child, state=new_state, dynamics=dynamics, depth=depth - 1)
         self.backprop_childs_value(node, action_idx, v)
+        if node.data.get('root', False):  # also store the value of the root node, if we ever want to use this
+            self.backprop_childs_value(node.parent, node.data['parent_action_idx'], v)
         return v + node.data.get('returns', 0)
 
     def get_mcts_policy_value(self, state, num_sims, dynamics: Dynamics, player=0, temp=1, root=None, depth=float('inf')):
@@ -176,9 +178,9 @@ class AbsMCTS:
             bestA = np.random.choice(bestAs)
             probs = np.zeros_like(counts)
             probs[bestA] = 1
-            return probs,value
+            return probs, value
         counts = np.power(counts, 1./temp)
-        return counts/np.sum(counts),value
+        return counts/np.sum(counts), value
 
 
 class MCTS(AbsMCTS):
