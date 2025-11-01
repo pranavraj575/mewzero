@@ -326,8 +326,9 @@ class AlphaZeroMCTS(MCTS):
                                           terminal=terminal,
                                           **kwargs)
         policy, value = self.prediciton.policy_value(state)
+        legal_action_indices = self.get_legal_actions(state=state)
         policy = self.restrict_policy(policy=policy.flatten(),
-                                      legal_action_indices=self.get_legal_actions(state=state)
+                                      legal_action_indices=legal_action_indices,
                                       )
         if kwargs.get('root', False):
             # add direchlet noise when creating the root
@@ -339,6 +340,7 @@ class AlphaZeroMCTS(MCTS):
                                       terminal=terminal,
                                       prior_policy=policy.detach().cpu().numpy(),
                                       prior_value=value.detach().cpu().numpy(),
+                                      actions=legal_action_indices,
                                       **kwargs)
 
     def expand_node_and_sim_value(self, node, state, dynamics: Dynamics):
