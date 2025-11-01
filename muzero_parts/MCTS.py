@@ -256,7 +256,7 @@ class MCTS(AbsMCTS):
             zeros = np.array(np.argwhere(node.data['Nsa'] == 0)).flatten()
 
         action_idx = np.random.choice(zeros)
-        action = self.get_legal_actions(state=state)[action_idx]
+        action = self.get_action(node, state=state, action_idx=action_idx)
         new_state, returns, next_player, terminal = dynamics.predict(state=state, action=action, mutate=False)
         leaf = self.make_leaf_node(state=new_state,
                                    parent=node,
@@ -326,9 +326,8 @@ class AlphaZeroMCTS(MCTS):
                                           terminal=terminal,
                                           **kwargs)
         policy, value = self.prediciton.policy_value(state)
-        legal_action_indices = self.get_legal_actions(state=state)
         policy = self.restrict_policy(policy=policy.flatten(),
-                                      legal_action_indices=legal_action_indices,
+                                      legal_action_indices=self.get_legal_actions(state=state)
                                       )
         if kwargs.get('root', False):
             # add direchlet noise when creating the root
@@ -340,7 +339,6 @@ class AlphaZeroMCTS(MCTS):
                                       terminal=terminal,
                                       prior_policy=policy.detach().cpu().numpy(),
                                       prior_value=value.detach().cpu().numpy(),
-                                      actions=legal_action_indices,
                                       **kwargs)
 
     def expand_node_and_sim_value(self, node, state, dynamics: Dynamics):
@@ -352,7 +350,7 @@ class AlphaZeroMCTS(MCTS):
             action_idx = np.argmax((prior + 1)*valid)
         else:
             action_idx = np.argmax((prior + 1)*(node.data['Nsa'] == 0))
-        action = self.get_legal_actions(state=state)[action_idx]
+        action=self.get_action(node, state=state, action_idx=action_idx)
         new_state, returns, next_player, terminal = dynamics.predict(state=state, action=action, mutate=False)
         leaf = self.make_leaf_node(state=new_state,
                                    parent=node,
