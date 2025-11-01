@@ -7,7 +7,7 @@ import torch
 from torch import nn
 
 
-class MuzeroRepresentation(nn.Module):
+class Representation(nn.Module):
     def __init__(self):
         super().__init__()
 
@@ -17,10 +17,10 @@ class MuzeroRepresentation(nn.Module):
         :param state: state or batch of states
         :return: encoded state or encoded batch of states
         """
-        raise NotImplementedError
+        return state
 
 
-class PyspielObservationRepreseentation(MuzeroRepresentation):
+class PyspielObservationRepreseentation(Representation):
     """
     for alphazero algorithm (no abstraction) applied to pyspiel games
         uses the observation tensors as the encoded state

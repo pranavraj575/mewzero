@@ -2,7 +2,8 @@ import numpy as np
 import torch
 
 from muzero_parts.dynamics import Dynamics
-from muzero_parts.representation import MuzeroRepresentation
+from muzero_parts.representation import Representation
+from muzero_parts.prediction import Prediction
 
 
 class Node:
@@ -36,6 +37,9 @@ class AbsMCTS:
         'returns' (required only for terminal nodes) -> immediate returns at a node
             if available for nonzero nodes, the value of moving to a node is calculated as
                 normal node's value + returns at the node
+        'actions' -> list of actions taken that correspond with the list of node children
+            this is not required in MCTS/alphazero/muzero, as actions are the same as indices
+            however, in continuous space games, we will need to sample actions and store them, so we will use that for this
     """
 
     def __init__(self, num_players):
@@ -168,6 +172,9 @@ class AbsMCTS:
         Returns:
             probs: a policy vector where the probability of the ith action is
                    proportional to Nsa[(s,a)]**(1./temp)
+            value: value of root node for each player
+            actions: actions correspoinding to policy, used for continuous space search
+                None usually, as this is implied in MCTS, Alphazero, Muzero
         """
         if root is None:
             root = self.make_root_node(state=state, player=player)
@@ -180,9 +187,9 @@ class AbsMCTS:
             bestA = np.random.choice(bestAs)
             probs = np.zeros_like(counts)
             probs[bestA] = 1
-            return probs, value
+            return probs, value,root.get('actions',None)
         counts = np.power(counts, 1./temp)
-        return counts/np.sum(counts), value
+        return counts/np.sum(counts), value, root.get('actions',None)
 
 
 class MCTS(AbsMCTS):
@@ -285,16 +292,16 @@ class AlphaZeroMCTS(MCTS):
         'prior_policy': probability distribution over valid action indexes
     """
 
-    def __init__(self, num_players, policy_value_map, is_pyspiel=False, exploration_constant=np.sqrt(2)):
+    def __init__(self, num_players, prediction:Prediction, is_pyspiel=False, exploration_constant=np.sqrt(2)):
         """
         :param num_players:
-        :param policy_value_map:
+        :param prediction:
             map from state -> (policy tensor, value tensor)
                 policy is over all possible actions, this is restricted to only legal actions and renormalized by self.create_leaf_node
         :param is_pyspiel:
         """
         super().__init__(num_players, is_pyspiel=is_pyspiel, exploration_constant=exploration_constant)
-        self.policy_value_map = policy_value_map
+        self.prediciton = prediction
 
     def restrict_policy(self, policy, legal_action_indices):
         """
@@ -317,12 +324,12 @@ class AlphaZeroMCTS(MCTS):
                                           parent_action_idx=parent_action_idx,
                                           terminal=terminal,
                                           **kwargs)
-        policy, value = self.policy_value_map(state)
+        policy, value = self.prediciton.policy_value(state)
         policy = self.restrict_policy(policy=policy.flatten(),
                                       legal_action_indices=self.get_legal_actions(state=state)
                                       )
         if kwargs.get('root', False):
-            # add direchlet noise to the root
+            # add direchlet noise when creating the root
             policy = self.add_direchlet_noise(policy=policy)
         value = value.flatten()
         return super().make_leaf_node(state=state,
@@ -378,10 +385,10 @@ class MuZeroMCTS(AlphaZeroMCTS):
         There are generally no terminal nodes, as we rely on a learned dynamics model
     """
 
-    def __init__(self, num_players, policy_value_map, num_distinct_actions, exploration_constant=np.sqrt(2)):
+    def __init__(self, num_players, prediction, num_distinct_actions, exploration_constant=np.sqrt(2)):
         super().__init__(
             num_players=num_players,
-            policy_value_map=policy_value_map,
+            prediction=prediction,
             is_pyspiel=False,
             exploration_constant=exploration_constant,
         )
@@ -441,6 +448,6 @@ if __name__ == '__main__':
     num_actions = game.num_distinct_actions()
     # alphazero version where the policy is always uniform over A, value is alwyas [0,0]
     mcts = AlphaZeroMCTS(num_players=game.num_players(), is_pyspiel=True,
-                         policy_value_map=lambda state: (torch.ones(num_actions)/num_actions, torch.zeros(game.num_players()))
+                         prediction=lambda state: (torch.ones(num_actions)/num_actions, torch.zeros(game.num_players()))
                          )
     print(mcts.get_mcts_policy_value(state=state, num_sims=10000, dynamics=dynamics, player=state.current_player(), temp=1))

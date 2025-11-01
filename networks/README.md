@@ -62,6 +62,8 @@ Splits network into branches, computed independently.
     There cannot be any layers after a split into tuples (any necessary network depth must be put into each branch).
   * For `"sum"`, the results of each branch will be summed.
     For this, each branch MUST have the same output dimension.
+  * For `"concat"`, the results of each branch will be concatenated.
+    The dimension of concatenation will be the optional `dim` key, with default `"dim":-1`.
   
 This is computed recursively, so splits can be repeatedly applied (though there is probably no reason to do this).
 An example of this is in `net_configs/split_cnn.txt`.

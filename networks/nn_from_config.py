@@ -149,6 +149,7 @@ class CustomNN(nn.Module):
     def __init__(self,
                  structure,
                  combine_heads='tuple',
+                 additional_args=None,
                  ):
         """
         Args:
@@ -163,13 +164,15 @@ class CustomNN(nn.Module):
         super().__init__()
         assert "layers" in structure
         assert "input_shape" in structure
+        self.additional_args = additional_args
         shape = structure['input_shape']
         layers = []
-        heads = []
+        heads = []  # list of CustomNN objects that are the heads
         for i, dic in enumerate(structure['layers']):
             if dic['type'] == 'split':
                 assert 'branches' in dic
                 comb = dic.get('combination', 'tuple')
+                # if we are leaving branches split, this must be the last layer, and we set the ouptut heads as necessary
                 if comb == 'tuple':
                     if not i == len(structure['layers']) - 1:
                         raise Exception("a split layer with 'combination':'tuple' must be the last layer in a network")
@@ -179,16 +182,25 @@ class CustomNN(nn.Module):
                             'layers': layer_lists,
                         }
                         heads.append(CustomNN(structure=substrucure))
-                elif comb == 'sum':
+                # otherwise, we must recombine the heads in some way, so we make another child CustomNN that is just the split computation
+                # this child CustomNN object then combines the heads as necessary as its final computation
+                # we use the computation of the child as a layer in the parent
+                elif comb == 'sum' or comb == 'concat':
                     small_dic = dic.copy()
                     small_dic['combination'] = 'tuple'
                     substrucure = {
                         'input_shape': shape,
                         'layers': [small_dic]
                     }
-                    summer = CustomNN(structure=substrucure, combine_heads='sum')
-                    layers.append(summer)
-                    shape = summer.output_shape
+                    if comb == 'concat':
+                        args = {'dim': dic.get('dim', -1)}
+                    else:
+                        args = dict()
+                    child = CustomNN(structure=substrucure, combine_heads=comb, additional_args=args)
+                    layers.append(child)
+                    shape = child.output_shape
+                else:
+                    raise Exception('no combination type implemented:', comb)
             elif dic['type'] == 'repeat':
                 for _ in range(dic['times']):
                     substrucure = {
@@ -214,6 +226,13 @@ class CustomNN(nn.Module):
                 self.output_shape = tuple(head.output_shape for head in self.heads)
             elif self.combine_heads == 'sum':
                 self.output_shape = self.heads[0].output_shape
+            elif self.combine_heads == 'concat':
+                assert 'dim' in self.additional_args
+                dim = self.additional_args['dim']
+                self.output_shape = list(self.heads[0].output_shape)
+                for head in self.heads[1:]:
+                    self.output_shape[dim] += head.output_shape[dim]
+                self.output_shape = tuple(self.output_shape)
             else:
                 raise Exception('combination type unknown:', combine_heads)
         else:
@@ -224,10 +243,13 @@ class CustomNN(nn.Module):
             return self.network(observations)
         else:
             pre_head = self.network(observations)
+            heads_enacted = tuple(head(pre_head) for head in self.heads)
             if self.combine_heads == "tuple":
-                return tuple(head(pre_head) for head in self.heads)
+                return heads_enacted
             elif self.combine_heads == "sum":
-                return sum([head(pre_head) for head in self.heads])
+                return sum(heads_enacted)
+            elif self.combine_heads == "concat":
+                return torch.concat(heads_enacted, dim=self.additional_args['dim'])
             else:
                 raise Exception('combination type unknown:', self.combine_heads)
 
@@ -313,3 +335,15 @@ if __name__ == '__main__':
     print("OUTPUT SHAPES:")
     output = net(torch.zeros((1, 10)))
     print(output.shape)
+
+    print("TESTING TTT")
+    f = open(os.path.join(network_dir, 'net_configs', 'ttt_pred.txt'), 'r')
+    ttt_pred = ast.literal_eval(f.read())
+    f.close()
+    net = CustomNN(structure=ttt_pred)
+
+    print()
+    print(net)
+    print("OUTPUT SHAPES:")
+    output = net(torch.zeros((1, 3, 3, 3)))
+    print(output)

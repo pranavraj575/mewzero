@@ -17,16 +17,17 @@ If the action space is continuous or discrete and infinite, this is a bit annoyi
          if finite size at every state (i.e. jenga, 'increasing size board game'), we may produce a policy via a map
             (s,a) -> R, which is then passed throuch softmax to produce a distribution over valid actions
 """
-from torch import nn
 from networks.nn_from_config import CustomNN
+from muzero_parts.representation import Representation
 
 
-class Prediction(nn.Module):
+class Prediction():
     finite_action_space = False  # whether there is a fixed size action space
     num_actions = -1  # if finite_action_space, stores the size
 
-    def __init__(self):
+    def __init__(self, representation: Representation = None):
         super().__init__()
+        self.representation = representation
 
     def policy_only(self, states):
         return self.policy_value(states)[0]
@@ -51,19 +52,22 @@ class MuZeroPrediction(Prediction):
     """
     finite_action_space = True
 
-    def __init__(self, network_config):
+    def __init__(self, network_config, representation: Representation = None):
         """
         :param network_config:
             produces a network (see nn_from_config) that returns (policy, value)
             this parameter will imply the num actions, as this will be the size of the policy vector
         """
-        super().__init__()
+        super().__init__(representation=representation)
         self.network = CustomNN(structure=network_config)
         self.num_actions = self.network.output_shape[0]
         self.unbatched_input_shape = network_config['input_shape']
 
     def policy_value(self, states):
-        return self.network(states)
+        if self.representation is None:
+            return self.network(states)
+        else:
+            return self.network(self.representation(states))
 
 
 class BadPrediction(Prediction):
@@ -72,12 +76,12 @@ class BadPrediction(Prediction):
     """
     finite_action_space = True
 
-    def __init__(self, num_actions, num_players):
+    def __init__(self, num_actions, num_players, representation: Representation = None):
         """
         :param num_actions: number of possible unique actions
         :param num_players: number of players
         """
-        super().__init__()
+        super().__init__(representation=representation)
         self.num_actions = num_actions
         self.num_players = num_players
 
