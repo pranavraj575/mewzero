@@ -187,9 +187,9 @@ class AbsMCTS:
             bestA = np.random.choice(bestAs)
             probs = np.zeros_like(counts)
             probs[bestA] = 1
-            return probs, value,root.get('actions',None)
+            return probs, value, root.get('actions', None)
         counts = np.power(counts, 1./temp)
-        return counts/np.sum(counts), value, root.get('actions',None)
+        return counts/np.sum(counts), value, root.get('actions', None)
 
 
 class MCTS(AbsMCTS):
@@ -292,7 +292,7 @@ class AlphaZeroMCTS(MCTS):
         'prior_policy': probability distribution over valid action indexes
     """
 
-    def __init__(self, num_players, prediction:Prediction, is_pyspiel=False, exploration_constant=np.sqrt(2)):
+    def __init__(self, num_players, prediction: Prediction, is_pyspiel=False, exploration_constant=np.sqrt(2)):
         """
         :param num_players:
         :param prediction:
@@ -312,9 +312,10 @@ class AlphaZeroMCTS(MCTS):
 
     def add_direchlet_noise(self, policy):
         eps = .25
-        dir = np.random.dirichlet(
-            np.zeros(len(policy),) + 0.3)
-        return policy*(1 - eps) + eps*dir
+        direchlet = torch.distributions.dirichlet.Dirichlet(
+            torch.ones(len(policy))*0.3
+        ).sample()
+        return policy*(1 - eps) + eps*direchlet
 
     def make_leaf_node(self, state, parent, parent_action_idx, terminal, **kwargs):
         if terminal:
