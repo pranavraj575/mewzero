@@ -187,9 +187,9 @@ class AbsMCTS:
             bestA = np.random.choice(bestAs)
             probs = np.zeros_like(counts)
             probs[bestA] = 1
-            return probs, value, root.get('actions', None)
+            return probs, value, root.data.get('actions', None)
         counts = np.power(counts, 1./temp)
-        return counts/np.sum(counts), value, root.get('actions', None)
+        return counts/np.sum(counts), value, root.data.get('actions', None)
 
 
 class MCTS(AbsMCTS):
