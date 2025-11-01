@@ -67,7 +67,7 @@ class MuZeroPrediction(Prediction):
         if self.representation is None:
             return self.network(states)
         else:
-            return self.network(self.representation(states))
+            return self.network(self.representation.encode(states))
 
 
 class BadPrediction(Prediction):
