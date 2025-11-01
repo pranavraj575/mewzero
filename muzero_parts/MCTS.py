@@ -170,6 +170,7 @@ class AbsMCTS:
             depth: if not infinity, only grows MCTS tree to a certian depth, and relies on the value function for leaves
                 this is useful in Muzero if we know the game has a certian max depth
         Returns:
+            root: root node of search, usually discarded byt sometimes useful
             probs: a policy vector where the probability of the ith action is
                    proportional to Nsa[(s,a)]**(1./temp)
             value: value of root node for each player
@@ -187,9 +188,9 @@ class AbsMCTS:
             bestA = np.random.choice(bestAs)
             probs = np.zeros_like(counts)
             probs[bestA] = 1
-            return probs, value, root.data.get('actions', None)
+            return root, probs, value, root.data.get('actions', None)
         counts = np.power(counts, 1./temp)
-        return counts/np.sum(counts), value, root.data.get('actions', None)
+        return root, counts/np.sum(counts), value, root.data.get('actions', None)
 
 
 class MCTS(AbsMCTS):
@@ -223,6 +224,7 @@ class MCTS(AbsMCTS):
             'player': 0,
             'Ns': 0,
             'parent_action_idx': parent_action_idx,
+            'actions': legal_actions,
         }
         default_data.update(kwargs)
         leaf = Node(parent=parent, data=default_data)
@@ -350,7 +352,7 @@ class AlphaZeroMCTS(MCTS):
             action_idx = np.argmax((prior + 1)*valid)
         else:
             action_idx = np.argmax((prior + 1)*(node.data['Nsa'] == 0))
-        action=self.get_action(node, state=state, action_idx=action_idx)
+        action = self.get_action(node, state=state, action_idx=action_idx)
         new_state, returns, next_player, terminal = dynamics.predict(state=state, action=action, mutate=False)
         leaf = self.make_leaf_node(state=new_state,
                                    parent=node,

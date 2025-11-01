@@ -26,19 +26,16 @@ def get_trajectory(initial_state, representation: Representation, dynamics: Dyna
     traj_values = []  # len n array of MCTS root node values estimated at each state
     # in AZ paper, this is ignored, instead it learns based on the reward of the episode
     while not terminal:
-        policy, value, actions = mcts.get_mcts_policy_value(state=state,
-                                                            num_sims=1,
-                                                            dynamics=dynamics,
-                                                            player=player,
-                                                            temp=1,
-                                                            root=None,
-                                                            depth=float('inf'),
-                                                            )
+        root, policy, value, actions = mcts.get_mcts_policy_value(state=state,
+                                                                  num_sims=1,
+                                                                  dynamics=dynamics,
+                                                                  player=player,
+                                                                  temp=1,
+                                                                  root=None,
+                                                                  depth=float('inf'),
+                                                                  )
         action_idx = np.random.choice(np.arange(len(policy)), p=policy)
-        if actions is not None:
-            action = actions[action_idx]
-        else:
-            action = action_idx
+        action = mcts.get_action(node=root, state=state, action_idx=action_idx)
         next_state, reward, next_player, terminal = dynamics.predict(state=state, action=action, mutate=False)
 
         traj_states.append(next_state)  # terminal state is added here on last iteration
