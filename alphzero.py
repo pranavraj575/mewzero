@@ -70,14 +70,16 @@ def get_training_data_from_trajectory(trajectory, state_conversion=None):
             data.append((state_conversion(traj_states[i]), policy, rewards))
     return data
 
-def train(prediction: Prediction, data,optim):
+
+def train(prediction: Prediction, data, optim):
     optim.zero_grad()
-    for state, policy, rewards in data:
+    for state, targ_pol, rewards in data:
         policy, value = prediction.policy_value(states=state)
-        loss = torch.square(value - rewards)-torch.sum(policy*torch.log(policy))
+        loss = torch.square(value - torch.tensor(rewards)) - torch.sum(torch.tensor(targ_pol)*torch.log(policy))
         loss.backward()
 
     optim.step()
+
 
 if __name__ == '__main__':
     import pyspiel
@@ -112,8 +114,8 @@ if __name__ == '__main__':
     data = get_training_data_from_trajectory(trajs)
     buff.extend(data)
     print(buff.sample_one())
-    optim=torch.optim.Adam(prediction.network.parameters())
-    train(prediction=prediction, data=buff.sample(10),optim=optim)
+    optim = torch.optim.Adam(prediction.network.parameters())
+    train(prediction=prediction, data=buff.sample(10), optim=optim)
 
     print()
     state.apply_action(1)
