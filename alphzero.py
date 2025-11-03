@@ -65,17 +65,17 @@ def get_training_data_from_trajectory(trajectory, state_conversion=None):
     for i in range(len(traj_actions)):
         policy = traj_policies[i]
         if state_conversion is None:
-            data.append((traj_states[i], policy,traj_avail_actions[i], rewards))
+            data.append((traj_states[i], policy, traj_avail_actions[i], rewards))
         else:
-            data.append((state_conversion(traj_states[i]), policy,traj_avail_actions[i], rewards))
+            data.append((state_conversion(traj_states[i]), policy, traj_avail_actions[i], rewards))
     return data
 
 
 def train(prediction: Prediction, data, optim):
     optim.zero_grad()
-    for state, targ_pol,avail_actions, rewards in data:
+    for state, targ_pol, avail_actions, rewards in data:
         policy, value = prediction.policy_value(states=state)
-        policy=policy[avail_actions]
+        policy = policy[:, avail_actions]
         loss = torch.square(value - torch.tensor(rewards)) - torch.sum(torch.tensor(targ_pol)*torch.log(policy))
         loss.backward()
 
