@@ -94,6 +94,12 @@ class ReplayBufferList(AbsReplayBuffer):
             disp = self.buffer[0]
         else:
             disp = None
+        if self.config.get('tensor_tuple', False):
+            # convert
+            item = tuple(
+                t if torch.is_tensor(t) else torch.tensor(t)
+                for t in item
+            )
         self.buffer.append(item)
         return disp
 
