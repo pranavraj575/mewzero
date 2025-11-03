@@ -28,7 +28,7 @@ def get_trajectory(initial_state, representation: Representation, dynamics: Dyna
     # in AZ paper, this is ignored, instead it learns based on the reward of the episode
     while not terminal:
         root, policy, value, actions = mcts.get_mcts_policy_value(state=state,
-                                                                  num_sims=1,
+                                                                  num_sims=1000,
                                                                   dynamics=dynamics,
                                                                   player=player,
                                                                   temp=1,
@@ -106,17 +106,17 @@ if __name__ == '__main__':
                     is_pyspiel=True,
                     )
     buff = ReplayBufferList(config={'tensor_tuple': False})
-    trajs = get_trajectory(initial_state=state,
-                           representation=Representation(),
-                           dynamics=PyspielDynamics(),
-                           mcts=mcts,
-                           player=state.current_player(),
-                           )
-    data = get_training_data_from_trajectory(trajs)
-    buff.extend(data)
-    print(buff.sample_one())
     optim = torch.optim.Adam(prediction.network.parameters())
-    train(prediction=prediction, data=buff.sample(10), optim=optim)
+    for _ in range(1000):
+        trajs = get_trajectory(initial_state=state,
+                               representation=Representation(),
+                               dynamics=PyspielDynamics(),
+                               mcts=mcts,
+                               player=state.current_player(),
+                               )
+        data = get_training_data_from_trajectory(trajs)
+        buff.extend(data)
+        train(prediction=prediction, data=buff.sample(), optim=optim)
 
     print()
     state.apply_action(1)
