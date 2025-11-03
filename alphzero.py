@@ -73,13 +73,18 @@ def get_training_data_from_trajectory(trajectory, state_conversion=None):
 
 def train(prediction: Prediction, data, optim):
     optim.zero_grad()
+    mean_loss = 0.
+    t = 0
     for state, targ_pol, avail_actions, rewards in data:
         policy, value = prediction.policy_value(states=state)
         policy = policy[:, avail_actions]
         loss = torch.mean(torch.square(value - torch.tensor(rewards))) - torch.sum(torch.tensor(targ_pol)*torch.log(policy))
-        loss.backward()
-
+        mean_loss += loss
+        t += 1
+    mean_loss = mean_loss/t
+    mean_loss.backward()
     optim.step()
+    return mean_loss.item()
 
 
 if __name__ == '__main__':
@@ -107,7 +112,7 @@ if __name__ == '__main__':
                     )
     buff = ReplayBufferList(config={'tensor_tuple': False})
     optim = torch.optim.Adam(prediction.network.parameters())
-    test_state=game.new_initial_state()
+    test_state = game.new_initial_state()
     test_state.apply_action(0)
     test_state.apply_action(1)
     root, corr_policy, _, _ = cmp_mcts.get_mcts_policy_value(state=test_state, num_sims=10000, dynamics=PyspielDynamics(), player=test_state.current_player())
@@ -121,8 +126,8 @@ if __name__ == '__main__':
                                )
         data = get_training_data_from_trajectory(trajs)
         buff.extend(data)
-        train(prediction=prediction, data=buff.sample(), optim=optim)
-        print(i)
+        loss = train(prediction=prediction, data=buff.sample(), optim=optim)
+        print(i, 'mean loss:', loss)
         print(test_state)
         print(prediction.policy_only(test_state).flatten().detach()[test_state.legal_actions()])
         print(corr_policy)
