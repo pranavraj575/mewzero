@@ -107,7 +107,10 @@ if __name__ == '__main__':
                     )
     buff = ReplayBufferList(config={'tensor_tuple': False})
     optim = torch.optim.Adam(prediction.network.parameters())
-    for _ in range(1000):
+    test_state=game.new_initial_state()
+    test_state.apply_action(1)
+
+    for i in range(100):
         trajs = get_trajectory(initial_state=state,
                                representation=Representation(),
                                dynamics=PyspielDynamics(),
@@ -117,7 +120,8 @@ if __name__ == '__main__':
         data = get_training_data_from_trajectory(trajs)
         buff.extend(data)
         train(prediction=prediction, data=buff.sample(), optim=optim)
-
+        print(i)
+        print(prediction.policy_only(test_state))
     print()
     state.apply_action(1)
     print(state)
