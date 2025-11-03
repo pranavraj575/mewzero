@@ -74,7 +74,8 @@ if __name__ == '__main__':
     from muzero_parts.dynamics import PyspielDynamics
     from muzero_parts.representation import PyspielObservationRepreseentation
     from muzero_parts.prediction import MuZeroPrediction
-    from muzero_parts.MCTS import AlphaZeroMCTS
+    from muzero_parts.MCTS import AlphaZeroMCTS, MCTS
+    from storage.replay_buffer import ReplayBufferList
 
     game = pyspiel.load_game('tic_tac_toe')
     state = game.new_initial_state()
@@ -87,9 +88,23 @@ if __name__ == '__main__':
                          prediction=prediction,
                          is_pyspiel=True,
                          )
-    get_trajectory(initial_state=state,
-                   representation=Representation(),
-                   dynamics=PyspielDynamics(),
-                   mcts=mcts,
-                   player=state.current_player(),
-                   )
+    cmp_mcts = MCTS(num_players=game.num_players(),
+                    is_pyspiel=True,
+                    )
+    buff = ReplayBufferList(config={'tensor_tuple': True})
+    trajs = get_trajectory(initial_state=state,
+                           representation=Representation(),
+                           dynamics=PyspielDynamics(),
+                           mcts=mcts,
+                           player=state.current_player(),
+                           )
+    data = get_training_data_from_trajectory(trajs)
+    buff.extend(data)
+
+    print()
+    state.apply_action(1)
+    print(state)
+    print(prediction.policy_only(state))
+    root, policy, _, _ = cmp_mcts.get_mcts_policy_value(state=state, num_sims=10000, dynamics=PyspielDynamics(), player=state.current_player())
+    print(policy)
+    print(root.data['Qsa'][:, state.current_player()])
