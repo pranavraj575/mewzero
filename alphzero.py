@@ -20,6 +20,7 @@ def get_trajectory(initial_state, representation: Representation, dynamics: Dyna
     traj_states = [state]  # len n+1 array of encoded states along path (including the terminal state, which has no associated policy/action)
     traj_policies = []  # len n array of MCTS policies from each state
     traj_actions = []  # len n array of actions taken
+    traj_avail_actions = []  # len n array of actions possible at each step
     traj_rewards = []  # len n array of rewards obtained at each action
     # in games like chess, this is usually all zeros except the last step
 
@@ -41,12 +42,13 @@ def get_trajectory(initial_state, representation: Representation, dynamics: Dyna
         traj_states.append(next_state)  # terminal state is added here on last iteration
         traj_policies.append(policy)
         traj_actions.append(action)
+        traj_avail_actions.append(actions)
         traj_rewards.append(reward)
         traj_values.append(value)
 
         state = next_state  # update state
 
-    return initial_state, traj_states, traj_policies, traj_actions, sum(traj_rewards), traj_rewards, traj_values
+    return initial_state, traj_states, traj_policies, traj_actions, traj_avail_actions, sum(traj_rewards), traj_rewards, traj_values
 
 
 def get_training_data_from_trajectory(trajectory, state_conversion=None):
@@ -58,15 +60,21 @@ def get_training_data_from_trajectory(trajectory, state_conversion=None):
         this is useful if we want to for example convert pyspiel states to observation tensors
     :return:
     """
-    initial_state, traj_states, traj_policies, traj_actions, rewards, traj_rewards, traj_values = trajectory
+    initial_state, traj_states, traj_policies, traj_actions, traj_avail_actions, rewards, traj_rewards, traj_values = trajectory
     data = []
     for i in range(len(traj_actions)):
+        policy = traj_policies[i]
         if state_conversion is None:
-            data.append((traj_states[i], traj_policies[i], rewards))
+            data.append((traj_states[i], policy, rewards))
         else:
-            data.append((state_conversion(traj_states[i]), traj_policies[i], rewards))
+            data.append((state_conversion(traj_states[i]), policy, rewards))
     return data
 
+def train(prediction:Prediction,data):
+    for state,policy,rewards in data:
+        prediction.policy_value(states=state)
+        pass
+    pass
 
 if __name__ == '__main__':
     import pyspiel
@@ -91,16 +99,17 @@ if __name__ == '__main__':
     cmp_mcts = MCTS(num_players=game.num_players(),
                     is_pyspiel=True,
                     )
-    buff = ReplayBufferList(config={'tensor_tuple': True})
+    buff = ReplayBufferList(config={'tensor_tuple': False})
     trajs = get_trajectory(initial_state=state,
                            representation=Representation(),
                            dynamics=PyspielDynamics(),
                            mcts=mcts,
                            player=state.current_player(),
                            )
-    data = get_training_data_from_trajectory(trajs,state_conversion=PyspielObservationRepreseentation().encode)
+    data = get_training_data_from_trajectory(trajs, state_conversion=PyspielObservationRepreseentation().encode)
     buff.extend(data)
-    print(buff.sample(batch=10))
+    print(buff.sample_one())
+
 
     print()
     state.apply_action(1)
