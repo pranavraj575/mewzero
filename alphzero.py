@@ -109,6 +109,7 @@ if __name__ == '__main__':
     optim = torch.optim.Adam(prediction.network.parameters())
     test_state=game.new_initial_state()
     test_state.apply_action(1)
+    root, corr_policy, _, _ = cmp_mcts.get_mcts_policy_value(state=test_state, num_sims=10000, dynamics=PyspielDynamics(), player=test_state.current_player())
 
     for i in range(100):
         trajs = get_trajectory(initial_state=state,
@@ -122,10 +123,5 @@ if __name__ == '__main__':
         train(prediction=prediction, data=buff.sample(), optim=optim)
         print(i)
         print(prediction.policy_only(test_state))
+        print(corr_policy)
     print()
-    state.apply_action(1)
-    print(state)
-    print(prediction.policy_only(state))
-    root, policy, _, _ = cmp_mcts.get_mcts_policy_value(state=state, num_sims=10000, dynamics=PyspielDynamics(), player=state.current_player())
-    print(policy)
-    print(root.data['Qsa'][:, state.current_player()])
