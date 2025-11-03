@@ -70,11 +70,15 @@ def get_training_data_from_trajectory(trajectory, state_conversion=None):
             data.append((state_conversion(traj_states[i]), policy, rewards))
     return data
 
-def train(prediction:Prediction,data):
-    for state,policy,rewards in data:
-        prediction.policy_value(states=state)
+
+def train(prediction: Prediction, data):
+    for state, policy, rewards in data:
+        policy,value=prediction.policy_value(states=state)
+        print(policy,value)
+
         pass
     pass
+
 
 if __name__ == '__main__':
     import pyspiel
@@ -106,10 +110,10 @@ if __name__ == '__main__':
                            mcts=mcts,
                            player=state.current_player(),
                            )
-    data = get_training_data_from_trajectory(trajs, state_conversion=PyspielObservationRepreseentation().encode)
+    data = get_training_data_from_trajectory(trajs)
     buff.extend(data)
     print(buff.sample_one())
-
+    train(prediction=prediction, data=buff.sample(10))
 
     print()
     state.apply_action(1)
