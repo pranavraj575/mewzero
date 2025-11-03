@@ -76,7 +76,7 @@ def train(prediction: Prediction, data, optim):
     for state, targ_pol, avail_actions, rewards in data:
         policy, value = prediction.policy_value(states=state)
         policy = policy[:, avail_actions]
-        loss = torch.square(value - torch.tensor(rewards)) - torch.sum(torch.tensor(targ_pol)*torch.log(policy))
+        loss = torch.mean(torch.square(value - torch.tensor(rewards))) - torch.sum(torch.tensor(targ_pol)*torch.log(policy))
         loss.backward()
 
     optim.step()
