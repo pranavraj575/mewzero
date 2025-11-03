@@ -98,8 +98,9 @@ if __name__ == '__main__':
                            mcts=mcts,
                            player=state.current_player(),
                            )
-    data = get_training_data_from_trajectory(trajs)
+    data = get_training_data_from_trajectory(trajs,state_conversion=PyspielObservationRepreseentation().encode)
     buff.extend(data)
+    print(buff.sample(batch=10))
 
     print()
     state.apply_action(1)
