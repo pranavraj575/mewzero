@@ -63,12 +63,8 @@ Splits network into branches, computed independently.
   With k lists of layer dictionaries, the network will split into k branches, each computing the network associated with one of the branches.
 * `combination`: optional parameter with default `"combination": "tuple"`.
   Determines how to combine the results of branches.
-  * For `"tuple"`, the result will be a k-tuple of the outputs of each branch.
-    There cannot be any layers after a split into tuples (any necessary network depth must be put into each branch).
-  * For `"sum"`, the results of each branch will be summed.
-    For this, each branch MUST have the same output dimension.
-  * For `"concat"`, the results of each branch will be concatenated.
-    The dimension of concatenation will be the optional `dim` key, with default `"dim":-1`.
+  Works the same as the `combination` argument for the `parallel` layer below.
+  Specifying this is equivalent to adding a `parallel` layer with no branches.
   
 This is computed recursively, so splits can be repeatedly applied (though there is probably no reason to do this).
 An example of this is in `net_configs/split_cnn.txt`.
@@ -86,12 +82,20 @@ Computes a tuple of k tensors independently, may merge at end of computation.
 * `combination`: optional parameter with default `"combination": "tuple"`.
   Determines how to combine the results of branches.
   * For `"tuple"`, the result will be a k-tuple of the outputs of each branch.
+    Optional `"extract_sub_tuples"` argument, with defaut `"extract_sub_tuples":[]`.
+    `"extract_sub_tuples"` is a list of indices for branches with tuple outputs that should be extracted and tupled at a higher level.
+    i.e. if the output shape of branch 0 is `(5,)`, and of branch 1 is `((2,),(3,))`, the overall output shape will be `((5,),((2,),(3,)))` normally.
+    if `"extract_sub_tuples":[1]`, the output shape will instead be `((5,),(2,),(3,))`.
   * For `"sum"`, the results of each branch will be summed.
     For this, each branch MUST have the same output dimension.
+    If `"combined_idxs"` is additionally included (e.g. `"combined_idxs":[0,2]`), only the specified branches will be summed.
+    The result will be a tuple of (uncombined branch 0, uncombined branch 1, ... , sum of combined branches)
   * For `"concat"`, the results of each branch will be concatenated.
     The dimension of concatenation will be the optional `dim` key, with default `"dim":-1`.
+    This can also specify `"combined_idxs"` with same behavior.
+    This will concatenate the order specified by `"combined_idxs"`, or in default order if unspecified.
 
-`net_configs/ttt_sa.txt` has an example of using this to merge a state,action pair input.
+`net_configs/ttt_sa.txt` has an example of using these to mess with a state,action pair input.
 
 ### `repeat`
 Repeats a block a certian number of times.

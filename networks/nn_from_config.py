@@ -161,15 +161,22 @@ class _CustomNNSplit(nn.Module):
         super().__init__()
 
         heads = []  # list of CustomNN objects that are the heads
+        output_shapes = []
         for layer_dict_list in layer_dict_lists:
-            structure = {
-                'input_shape': input_shape,
-                'layers': layer_dict_list,
-            }
-            heads.append(CustomNN(structure=structure))
+            if layer_dict_list is None or len(layer_dict_list) == 0:
+                heads.append(nn.Identity())
+                output_shapes.append(input_shape)
+            else:
+                structure = {
+                    'input_shape': input_shape,
+                    'layers': layer_dict_list,
+                }
+                head = CustomNN(structure=structure)
+                heads.append(head)
+                output_shapes.append(head.output_shape)
 
         self.heads = nn.ModuleList(heads)
-        self.output_shape = tuple(head.output_shape for head in self.heads)
+        self.output_shape = tuple(output_shapes)
 
     def forward(self, observations):
         return tuple(head(observations) for head in self.heads)
@@ -203,7 +210,7 @@ class _CustomNNParallel(nn.Module):
         assert len(input_shape) == len(layer_dict_lists)
         out_shapes = []
         for in_sh, layer_dict_list in zip(input_shape, layer_dict_lists):
-            if layer_dict_list is None:
+            if layer_dict_list is None or len(layer_dict_list) == 0:
                 tails.append(nn.Identity())
                 out_shapes.append(in_sh)
             else:
@@ -218,27 +225,82 @@ class _CustomNNParallel(nn.Module):
         self.tails = nn.ModuleList(tails)
         self.combine_tails = combine_tails
         self.extra_kwargs = kwargs
+
+        if 'combined_idxs' in self.extra_kwargs:
+            self.extra_kwargs['uncombined_idxs'] = [i for i in range(len(out_shapes))
+                                                    if i not in self.extra_kwargs['combined_idxs']]
         if self.combine_tails == 'tuple':
-            self.output_shape = out_shapes
+            if 'extract_sub_tuples' in self.extra_kwargs:
+                self.extra_kwargs['extract_sub_tuples'] = set(self.extra_kwargs['extract_sub_tuples'])
+                self.output_shape = []
+                for i, sh in enumerate(out_shapes):
+                    if i in self.extra_kwargs['extract_sub_tuples']:
+                        # sh is a tuple of shapes, extend the array by these shapes
+                        self.output_shape.extend(sh)
+                    else:
+                        self.output_shape.append(sh)
+            else:
+                self.output_shape = out_shapes
         elif self.combine_tails == 'sum':
-            self.output_shape = out_shapes[0]
+            combined_idxs = self.extra_kwargs.get('combined_idxs', list(range(len(out_shapes))))
+            comb_shape = out_shapes[combined_idxs[0]]
+            if 'combined_idxs' in self.extra_kwargs:
+                self.output_shape = []
+                for i, sh in enumerate(out_shapes):
+                    if i not in combined_idxs:
+                        self.output_shape.append(sh)
+                self.output_shape.append(comb_shape)
+            else:
+                self.output_shape = comb_shape
         elif self.combine_tails == 'concat':
+            combined_idxs = self.extra_kwargs.get('combined_idxs', list(range(len(out_shapes))))
             dim = self.extra_kwargs.get('dim', -1)
-            self.output_shape = list(out_shapes[0])
-            for out_sh in out_shapes[1:]:
-                self.output_shape[dim] += out_sh[dim]
-            self.output_shape = tuple(self.output_shape)
+            comb_shape = list(out_shapes[combined_idxs[0]])
+            for comb_idx in combined_idxs[1:]:
+                comb_shape[dim] += out_shapes[comb_idx][dim]
+            comb_shape = tuple(comb_shape)
+            if 'combined_idxs' in self.extra_kwargs:
+                self.output_shape = []
+                for i, sh in enumerate(out_shapes):
+                    if i not in combined_idxs:
+                        self.output_shape.append(sh)
+                self.output_shape.append(comb_shape)
+            else:
+                self.output_shape = comb_shape
         else:
             raise Exception('combination type unknown:', self.combine_tails)
 
     def forward(self, observations):
         pre_com = tuple(tail(obs) for tail, obs in zip(self.tails, observations))
         if self.combine_tails == "tuple":
-            return pre_com
+            if 'extract_sub_tuples' in self.extra_kwargs:
+                out = []
+                for i, tail_output in enumerate(pre_com):
+                    if i in self.extra_kwargs['extract_sub_tuples']:
+                        # sh is a tuple of shapes, extend the array by these shapes
+                        out.extend(tail_output)
+                    else:
+                        out.append(tail_output)
+                return tuple(out)
+            else:
+                return pre_com
         elif self.combine_tails == "sum":
-            return sum(pre_com)
+            if 'combined_idxs' in self.extra_kwargs:
+                combined = sum([pre_com[comb_idx] for comb_idx in self.extra_kwargs['combined_idxs']])
+                uncombined = [pre_com[uncomb_idx] for uncomb_idx in self.extra_kwargs['uncombined_idxs']]
+                uncombined.append(combined)
+                return tuple(uncombined)
+            else:
+                return sum(pre_com)
         elif self.combine_tails == "concat":
-            return torch.concat(pre_com, dim=self.extra_kwargs.get('dim', -1))
+            if 'combined_idxs' in self.extra_kwargs:
+                combined = torch.concat([pre_com[comb_idx] for comb_idx in self.extra_kwargs['combined_idxs']],
+                                        dim=self.extra_kwargs.get('dim', -1))
+                uncombined = [pre_com[uncomb_idx] for uncomb_idx in self.extra_kwargs['uncombined_idxs']]
+                uncombined.append(combined)
+                return tuple(uncombined)
+            else:
+                return torch.concat(pre_com, dim=self.extra_kwargs.get('dim', -1))
         else:
             raise Exception('combination type unknown:', self.combine_tails)
 
@@ -272,19 +334,14 @@ class CustomNN(nn.Module):
                 layers.append(split_lyr)
                 shape = split_lyr.output_shape
                 if 'combination' in dic:
-                    comb = dic['combination']
-                    if comb == 'sum':
+                    if dic['combination'] == 'tuple' and 'extract_sub_tuples' not in dic:
+                        pass
+                        # print('no need to specify combinatation==tuple')
+                    else:
                         merge_lyr = _CustomNNParallel(input_shape=shape,
                                                       layer_dict_lists=None,
-                                                      combine_tails='sum',
-                                                      )
-                        layers.append(merge_lyr)
-                        shape = merge_lyr.output_shape
-                    elif comb == 'concat':
-                        merge_lyr = _CustomNNParallel(input_shape=shape,
-                                                      layer_dict_lists=None,
-                                                      combine_tails='concat',
-                                                      dim=dic.get('dim', -1),
+                                                      combine_tails=dic['combination'],
+                                                      **dic,
                                                       )
                         layers.append(merge_lyr)
                         shape = merge_lyr.output_shape
@@ -424,5 +481,6 @@ if __name__ == '__main__':
     print()
     print(net)
     print("OUTPUT SHAPES:")
-    output = net((torch.zeros((1, 3, 3, 3)), torch.zeros((1,), dtype=torch.int)))
+    output = net((torch.zeros((1, 64)), torch.zeros((1,), dtype=torch.int)))
     print(output)
+    print(net.output_shape)

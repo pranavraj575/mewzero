@@ -1,20 +1,50 @@
-{
-    'input_shape': ((3, 3, 3),(1,)),
+{ # takes an encoded state (64 dimensional) and an action (integer 0-8) and produces a new encoded state
+  # does this by predicting a residual: s' = s + f(s,a)
+    'input_shape': ((64,), (1,)),
     'layers':
         [
-            {
+            {  # this layer will turn this into (state, state, action embedding) by copying the state and extracting the tuple
                 'type': 'parallel',
-                'combination': 'concat',
+                'extract_sub_tuples':[0],
                 'branches':
                 [
                     [
-                        {'type':'flatten'},
+                        {
+                          'type':'split',
+                          'branches':[None, None] # copy state into two branches, [[],[]] would also work
+                        },
                     ],
                     [
-                        {
+                        { # produce 16 dimensional action embedding
                             'type':'embedding',
                             'num_embeddings':9,
-                            'embedding_dim':10,
+                            'embedding_dim':16,
+                        },
+                    ],
+                ]
+            },
+            { # concatenate one state and action, this becomes (state, state action)
+                'type':'parallel',
+                'combination':'concat',
+                'combined_idxs':[1,2],
+            },
+            { # state' = state + f(state action), need to make sure that f(state action) has same dimension as state
+                'type':'parallel',
+                'combination':'sum',
+                'branches':
+                [
+                    [],
+                    [
+                        {
+                            'type':'linear',
+                            'out_features':128,
+                            'bias':True,
+                        },
+                        {'type': 'relu'},
+                        {
+                            'type':'linear',
+                            'out_features':64,
+                            'bias':True,
                         },
                     ],
                 ]
