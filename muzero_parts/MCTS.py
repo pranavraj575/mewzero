@@ -45,7 +45,7 @@ class AbsMCTS:
     def __init__(self, num_players):
         self.num_players = num_players
 
-    def make_root_node(self, state, **kwargs):
+    def make_root_node(self, state, player, **kwargs):
         dummy_node = Node(
             parent=None,
             data={
@@ -53,12 +53,12 @@ class AbsMCTS:
                 'dummy': True,
                 'Nsa': np.zeros(1),
                 'Qsa': np.zeros((1, self.num_players)),
-                'player': -1,
                 'Ns': 0,
             }
         )
         dummy_node.children = [None]  # will be set to [root] in make_leaf_node
         root = self.make_leaf_node(state=state,
+                                   player=player,
                                    parent=dummy_node,
                                    parent_action_idx=0,
                                    terminal=False,
@@ -67,7 +67,7 @@ class AbsMCTS:
                                    )
         return root
 
-    def make_leaf_node(self, state, parent, parent_action_idx, terminal, **kwargs):
+    def make_leaf_node(self, state, player, parent, parent_action_idx, terminal, **kwargs):
         """
         creates leaf node with state 'state' from taking parent_action_idx at parent
         updates parent's children to include this node
@@ -215,13 +215,13 @@ class MCTS(AbsMCTS):
     def get_action(self, node, state, action_idx):
         return self.get_legal_actions(state)[action_idx]
 
-    def make_leaf_node(self, state, parent, parent_action_idx, terminal, **kwargs):
+    def make_leaf_node(self, state, player, parent, parent_action_idx, terminal, **kwargs):
         legal_actions = self.get_legal_actions(state=state)
         default_data = {
             'terminal': terminal,
             'Nsa': np.zeros(len(legal_actions)),
             'Qsa': np.zeros((len(legal_actions), self.num_players)),
-            'player': 0,
+            'player': player,
             'Ns': 0,
             'parent_action_idx': parent_action_idx,
             'actions': legal_actions,
@@ -261,9 +261,9 @@ class MCTS(AbsMCTS):
         action = self.get_action(node, state=state, action_idx=action_idx)
         new_state, returns, next_player, terminal = dynamics.predict(state=state, action=action, mutate=False)
         leaf = self.make_leaf_node(state=new_state,
+                                   player=next_player,
                                    parent=node,
                                    terminal=terminal,
-                                   player=next_player,
                                    returns=returns,
                                    parent_action_idx=action_idx,
                                    )
@@ -319,10 +319,11 @@ class AlphaZeroMCTS(MCTS):
         ).sample()
         return policy*(1 - eps) + eps*direchlet
 
-    def make_leaf_node(self, state, parent, parent_action_idx, terminal, **kwargs):
+    def make_leaf_node(self, state, player, parent, parent_action_idx, terminal, **kwargs):
         if terminal:
             # do not produce a prior policy and value for terminal nodes
             return super().make_leaf_node(state=state,
+                                          player=player,
                                           parent=parent,
                                           parent_action_idx=parent_action_idx,
                                           terminal=terminal,
@@ -336,6 +337,7 @@ class AlphaZeroMCTS(MCTS):
             policy = self.add_direchlet_noise(policy=policy)
         value = value.flatten()
         return super().make_leaf_node(state=state,
+                                      player=player,
                                       parent=parent,
                                       parent_action_idx=parent_action_idx,
                                       terminal=terminal,
@@ -355,9 +357,9 @@ class AlphaZeroMCTS(MCTS):
         action = self.get_action(node, state=state, action_idx=action_idx)
         new_state, returns, next_player, terminal = dynamics.predict(state=state, action=action, mutate=False)
         leaf = self.make_leaf_node(state=new_state,
+                                   player=next_player,
                                    parent=node,
                                    terminal=terminal,
-                                   player=next_player,
                                    returns=returns,
                                    parent_action_idx=action_idx,
                                    )
@@ -400,11 +402,12 @@ class MuZeroMCTS(AlphaZeroMCTS):
     def get_legal_actions(self, state):
         return list(range(self.num_distinct_actions))
 
-    def make_leaf_node(self, state, parent, parent_action_idx, terminal, **kwargs):
+    def make_leaf_node(self, state, player, parent, parent_action_idx, terminal, **kwargs):
         """
         maybe should store the state of the leaf
         """
         leaf = super().make_leaf_node(state=state,
+                                      player=player,
                                       parent=parent,
                                       parent_action_idx=parent_action_idx,
                                       terminal=terminal,
@@ -438,19 +441,19 @@ if __name__ == '__main__':
     import pyspiel
     import torch
     from muzero_parts.dynamics import PyspielDynamics
+    from muzero_parts.prediction import BadPrediction
 
     game = pyspiel.load_game('tic_tac_toe')
     state = game.new_initial_state()
-    state.apply_action(4)
-    state.apply_action(1)
-    state.apply_action(8)
     state.apply_action(0)
-    state.apply_action(2)
+
     print(state)
     dynamics = PyspielDynamics()
     num_actions = game.num_distinct_actions()
     # alphazero version where the policy is always uniform over A, value is alwyas [0,0]
     mcts = AlphaZeroMCTS(num_players=game.num_players(), is_pyspiel=True,
-                         prediction=lambda state: (torch.ones(num_actions)/num_actions, torch.zeros(game.num_players()))
+                         prediction=BadPrediction(num_actions, num_players=game.num_players())
                          )
-    print(mcts.get_mcts_policy_value(state=state, num_sims=10000, dynamics=dynamics, player=state.current_player(), temp=1))
+    root, policy, value, actions = mcts.get_mcts_policy_value(state=state, num_sims=100000, dynamics=dynamics, player=state.current_player(), temp=1)
+    print(root.data)
+    print(policy, value)

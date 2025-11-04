@@ -7,14 +7,14 @@
             },
             {
              'type':'repeat',
-             'times':2,
+             'times':3,
              'block':[
                {
                 'type':'linear',
-                'out_features':64,
+                'out_features':128,
                 'bias':True,
                },
-               {'type': 'ReLU'},
+               {'type': 'relu'},
              ]
             },
             {

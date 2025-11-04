@@ -17,6 +17,7 @@ If the action space is continuous or discrete and infinite, this is a bit annoyi
          if finite size at every state (i.e. jenga, 'increasing size board game'), we may produce a policy via a map
             (s,a) -> R, which is then passed throuch softmax to produce a distribution over valid actions
 """
+import torch
 from networks.nn_from_config import CustomNN
 from muzero_parts.representation import Representation
 
@@ -91,7 +92,7 @@ class BadPrediction(Prediction):
 
 
 if __name__ == "__main__":
-    import torch, pyspiel, numpy as np
+    import pyspiel, numpy as np
 
     g = pyspiel.load_game("tic_tac_toe")
     network_config = {
