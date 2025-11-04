@@ -46,6 +46,11 @@ Linear torch layer
 
 Note that input_features is calculated automatically, and does not need to be specified.
 
+### `embedding`
+Embedding torch layer
+* `num_embeddings`: REQUIRED parameter, the number of unique embeddings to store
+* `embedding_dim`: REQUIRED parameter, the dimension of each embedding
+
 ### `cnn`, `maxpool`, `avgpool`
 Conv2d, MaxPool2d, AvgPool2d torch layers respectively
 * `kernel_size`: REQUIRED parameter, the shape of the kernel passed to each torch layer
@@ -71,6 +76,22 @@ A example of splitting multiple times is in `net_configs/double_split_cnn.txt`.
 
 The input for each branch will be the output of the layer immediately before it.
 This is why we do not need to specify the input shape.
+
+
+### `parallel`
+Computes a tuple of k tensors independently, may merge at end of computation.
+* `branches`: optional parameter, list of k lists of layer dictionaries.
+  Defaults to doing no computation.
+  Each list can also be `None` to do no computation
+* `combination`: optional parameter with default `"combination": "tuple"`.
+  Determines how to combine the results of branches.
+  * For `"tuple"`, the result will be a k-tuple of the outputs of each branch.
+  * For `"sum"`, the results of each branch will be summed.
+    For this, each branch MUST have the same output dimension.
+  * For `"concat"`, the results of each branch will be concatenated.
+    The dimension of concatenation will be the optional `dim` key, with default `"dim":-1`.
+
+`net_configs/ttt_sa.txt` has an example of using this to merge a state,action pair input.
 
 ### `repeat`
 Repeats a block a certian number of times.

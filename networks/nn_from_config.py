@@ -92,6 +92,9 @@ def layer_from_config_dict(dic, input_shape=None, only_shape=False):
                      )
         else:
             shape = None
+    elif typ == 'embedding':
+        if not only_shape: layer = nn.Embedding(num_embeddings=dic['num_embeddings'], embedding_dim=dic['embedding_dim'])
+        shape = (dic['embedding_dim'],)
     # image stuff has annoying output shape calculation
     # only need to write it once
     elif typ in ['cnn', 'maxpool', 'avgpool']:
@@ -141,6 +144,105 @@ def layer_from_config_dict(dic, input_shape=None, only_shape=False):
     return layer, shape
 
 
+class _CustomNNSplit(nn.Module):
+    """
+    Network to split an input into a tuple, applying each specified head to the input
+    """
+
+    def __init__(self,
+                 input_shape,
+                 layer_dict_lists,
+                 ):
+        """
+        Args:
+            input_shape: shape of input
+            layer_dict_lists: list of lists of layer dicts
+        """
+        super().__init__()
+
+        heads = []  # list of CustomNN objects that are the heads
+        for layer_dict_list in layer_dict_lists:
+            structure = {
+                'input_shape': input_shape,
+                'layers': layer_dict_list,
+            }
+            heads.append(CustomNN(structure=structure))
+
+        self.heads = nn.ModuleList(heads)
+        self.output_shape = tuple(head.output_shape for head in self.heads)
+
+    def forward(self, observations):
+        return tuple(head(observations) for head in self.heads)
+
+
+class _CustomNNParallel(nn.Module):
+    """
+    Network to compute on tuple of tensors in parallel,
+        after computation, can leave as a tuple, concatenate them along a dimension, or take the sum
+    """
+
+    def __init__(self,
+                 input_shape,
+                 layer_dict_lists=None,
+                 combine_tails='tuple',
+                 **kwargs,
+                 ):
+        """
+        Args:
+            input_shape: shape of input, is a tuple of input shapes
+            layer_dict_lists: list of lists of layer dicts
+                same length as input_shape, the ith layer dict list will be applied to the ith input before combining
+                if None, does no computation on each branch
+                each list can also be swapped with None, which does no computation
+            combine_tails: how to combine the tuple
+        """
+        super().__init__()
+        tails = []  # list of CustomNN objects that are the tails
+        if layer_dict_lists is None:
+            layer_dict_lists = [None for _ in input_shape]
+        assert len(input_shape) == len(layer_dict_lists)
+        out_shapes = []
+        for in_sh, layer_dict_list in zip(input_shape, layer_dict_lists):
+            if layer_dict_list is None:
+                tails.append(nn.Identity())
+                out_shapes.append(in_sh)
+            else:
+                structure = {
+                    'input_shape': in_sh,
+                    'layers': layer_dict_list,
+                }
+                tail = CustomNN(structure=structure)
+                tails.append(tail)
+                out_shapes.append(tail.output_shape)
+        out_shapes = tuple(out_shapes)
+        self.tails = nn.ModuleList(tails)
+        self.combine_tails = combine_tails
+        self.extra_kwargs = kwargs
+        if self.combine_tails == 'tuple':
+            self.output_shape = out_shapes
+        elif self.combine_tails == 'sum':
+            self.output_shape = out_shapes[0]
+        elif self.combine_tails == 'concat':
+            dim = self.extra_kwargs.get('dim', -1)
+            self.output_shape = list(out_shapes[0])
+            for out_sh in out_shapes[1:]:
+                self.output_shape[dim] += out_sh[dim]
+            self.output_shape = tuple(self.output_shape)
+        else:
+            raise Exception('combination type unknown:', self.combine_tails)
+
+    def forward(self, observations):
+        pre_com = tuple(tail(obs) for tail, obs in zip(self.tails, observations))
+        if self.combine_tails == "tuple":
+            return pre_com
+        elif self.combine_tails == "sum":
+            return sum(pre_com)
+        elif self.combine_tails == "concat":
+            return torch.concat(pre_com, dim=self.extra_kwargs.get('dim', -1))
+        else:
+            raise Exception('combination type unknown:', self.combine_tails)
+
+
 class CustomNN(nn.Module):
     """
     custom network built with config file
@@ -148,8 +250,6 @@ class CustomNN(nn.Module):
 
     def __init__(self,
                  structure,
-                 combine_heads='tuple',
-                 additional_args=None,
                  ):
         """
         Args:
@@ -158,49 +258,44 @@ class CustomNN(nn.Module):
                 can also put in None, then enter config file
                 (input_shape -> unbatched original input shape
                 layers -> list of dicts for each layer)
-            combine_heads: how to combine multiple output heads, by default returns a tuple
 
         """
         super().__init__()
         assert "layers" in structure
         assert "input_shape" in structure
-        self.additional_args = additional_args
         shape = structure['input_shape']
         layers = []
-        heads = []  # list of CustomNN objects that are the heads
         for i, dic in enumerate(structure['layers']):
             if dic['type'] == 'split':
                 assert 'branches' in dic
-                comb = dic.get('combination', 'tuple')
-                # if we are leaving branches split, this must be the last layer, and we set the ouptut heads as necessary
-                if comb == 'tuple':
-                    if not i == len(structure['layers']) - 1:
-                        raise Exception("a split layer with 'combination':'tuple' must be the last layer in a network")
-                    for layer_lists in dic['branches']:
-                        substrucure = {
-                            'input_shape': shape,
-                            'layers': layer_lists,
-                        }
-                        heads.append(CustomNN(structure=substrucure))
-                # otherwise, we must recombine the heads in some way, so we make another child CustomNN that is just the split computation
-                # this child CustomNN object then combines the heads as necessary as its final computation
-                # we use the computation of the child as a layer in the parent
-                elif comb == 'sum' or comb == 'concat':
-                    small_dic = dic.copy()
-                    small_dic['combination'] = 'tuple'
-                    substrucure = {
-                        'input_shape': shape,
-                        'layers': [small_dic]
-                    }
-                    if comb == 'concat':
-                        args = {'dim': dic.get('dim', -1)}
-                    else:
-                        args = dict()
-                    child = CustomNN(structure=substrucure, combine_heads=comb, additional_args=args)
-                    layers.append(child)
-                    shape = child.output_shape
-                else:
-                    raise Exception('no combination type implemented:', comb)
+                split_lyr = _CustomNNSplit(input_shape=shape, layer_dict_lists=dic['branches'])
+                layers.append(split_lyr)
+                shape = split_lyr.output_shape
+                if 'combination' in dic:
+                    comb = dic['combination']
+                    if comb == 'sum':
+                        merge_lyr = _CustomNNParallel(input_shape=shape,
+                                                      layer_dict_lists=None,
+                                                      combine_tails='sum',
+                                                      )
+                        layers.append(merge_lyr)
+                        shape = merge_lyr.output_shape
+                    elif comb == 'concat':
+                        merge_lyr = _CustomNNParallel(input_shape=shape,
+                                                      layer_dict_lists=None,
+                                                      combine_tails='concat',
+                                                      dim=dic.get('dim', -1),
+                                                      )
+                        layers.append(merge_lyr)
+                        shape = merge_lyr.output_shape
+            elif dic['type'] == 'parallel':
+                par_lyr = _CustomNNParallel(input_shape=shape,
+                                            layer_dict_lists=dic.get('branches', None),
+                                            combine_tails=dic.get('combination', 'tuple'),
+                                            **dic,  # give it any extra kwargs that are in dic
+                                            )
+                layers.append(par_lyr)
+                shape = par_lyr.output_shape
             elif dic['type'] == 'repeat':
                 for _ in range(dic['times']):
                     substrucure = {
@@ -216,42 +311,14 @@ class CustomNN(nn.Module):
                                                       only_shape=False,
                                                       )
                 layers.append(layer)
-
-        self.network = nn.Sequential(*layers)
-        self.heads = None
-        if heads:
-            self.heads = nn.ModuleList(heads)
-            self.combine_heads = combine_heads
-            if self.combine_heads == 'tuple':
-                self.output_shape = tuple(head.output_shape for head in self.heads)
-            elif self.combine_heads == 'sum':
-                self.output_shape = self.heads[0].output_shape
-            elif self.combine_heads == 'concat':
-                assert 'dim' in self.additional_args
-                dim = self.additional_args['dim']
-                self.output_shape = list(self.heads[0].output_shape)
-                for head in self.heads[1:]:
-                    self.output_shape[dim] += head.output_shape[dim]
-                self.output_shape = tuple(self.output_shape)
-            else:
-                raise Exception('combination type unknown:', combine_heads)
+        if len(layers) == 1:
+            self.network = layers[0]
         else:
-            self.output_shape = shape
+            self.network = nn.Sequential(*layers)
+        self.output_shape = shape
 
     def forward(self, observations):
-        if self.heads is None:
-            return self.network(observations)
-        else:
-            pre_head = self.network(observations)
-            heads_enacted = tuple(head(pre_head) for head in self.heads)
-            if self.combine_heads == "tuple":
-                return heads_enacted
-            elif self.combine_heads == "sum":
-                return sum(heads_enacted)
-            elif self.combine_heads == "concat":
-                return torch.concat(heads_enacted, dim=self.additional_args['dim'])
-            else:
-                raise Exception('combination type unknown:', self.combine_heads)
+        return self.network(observations)
 
 
 if __name__ == '__main__':
@@ -346,4 +413,16 @@ if __name__ == '__main__':
     print(net)
     print("OUTPUT SHAPES:")
     output = net(torch.zeros((1, 3, 3, 3)))
+    print(output)
+
+    print("TESTING TTT sa")
+    f = open(os.path.join(network_dir, 'net_configs', 'ttt_sa.txt'), 'r')
+    ttt_sa = ast.literal_eval(f.read())
+    f.close()
+    net = CustomNN(structure=ttt_sa)
+
+    print()
+    print(net)
+    print("OUTPUT SHAPES:")
+    output = net((torch.zeros((1, 3, 3, 3)), torch.zeros((1,), dtype=torch.int)))
     print(output)
