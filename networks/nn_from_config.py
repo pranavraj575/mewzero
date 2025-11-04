@@ -7,6 +7,7 @@ also supports 'split' - allows for splitting into multiple heads (i.e. policy, v
     returns a tuple of tensors when passed into CustomNN
 """
 import numpy as np
+import torch
 from torch import nn
 import ast
 
@@ -249,7 +250,8 @@ class _CustomNNParallel(nn.Module):
                 for i, sh in enumerate(out_shapes):
                     if i not in combined_idxs:
                         self.output_shape.append(sh)
-                self.output_shape.append(comb_shape)
+                self.output_shape.insert(self.extra_kwargs.get('idx_of_combination', len(self.output_shape)),
+                                         comb_shape)
             else:
                 self.output_shape = comb_shape
         elif self.combine_tails == 'concat':
@@ -264,7 +266,8 @@ class _CustomNNParallel(nn.Module):
                 for i, sh in enumerate(out_shapes):
                     if i not in combined_idxs:
                         self.output_shape.append(sh)
-                self.output_shape.append(comb_shape)
+                self.output_shape.insert(self.extra_kwargs.get('idx_of_combination', len(self.output_shape)),
+                                         comb_shape)
             else:
                 self.output_shape = comb_shape
         else:
@@ -288,7 +291,8 @@ class _CustomNNParallel(nn.Module):
             if 'combined_idxs' in self.extra_kwargs:
                 combined = sum([pre_com[comb_idx] for comb_idx in self.extra_kwargs['combined_idxs']])
                 uncombined = [pre_com[uncomb_idx] for uncomb_idx in self.extra_kwargs['uncombined_idxs']]
-                uncombined.append(combined)
+                uncombined.insert(self.extra_kwargs.get('idx_of_combination', len(uncombined)),
+                                  combined)
                 return tuple(uncombined)
             else:
                 return sum(pre_com)
@@ -297,7 +301,8 @@ class _CustomNNParallel(nn.Module):
                 combined = torch.concat([pre_com[comb_idx] for comb_idx in self.extra_kwargs['combined_idxs']],
                                         dim=self.extra_kwargs.get('dim', -1))
                 uncombined = [pre_com[uncomb_idx] for uncomb_idx in self.extra_kwargs['uncombined_idxs']]
-                uncombined.append(combined)
+                uncombined.insert(self.extra_kwargs.get('idx_of_combination', len(uncombined)),
+                                  combined)
                 return tuple(uncombined)
             else:
                 return torch.concat(pre_com, dim=self.extra_kwargs.get('dim', -1))
@@ -379,7 +384,7 @@ class CustomNN(nn.Module):
 
 
 if __name__ == '__main__':
-    import os, torch
+    import os
 
     print(layer_from_config_dict(dic={'type': 'relu', }))
     print(layer_from_config_dict(dic={'type': 'flatten', 'start_dim': 2, 'end_dim': 4},
@@ -472,15 +477,28 @@ if __name__ == '__main__':
     output = net(torch.zeros((1, 3, 3, 3)))
     print(output)
 
-    print("TESTING TTT sa")
-    f = open(os.path.join(network_dir, 'net_configs', 'ttt_sa.txt'), 'r')
-    ttt_sa = ast.literal_eval(f.read())
+    print("TESTING TTT dyn")
+    f = open(os.path.join(network_dir, 'net_configs', 'ttt_dyn.txt'), 'r')
+    ttt_dyn = ast.literal_eval(f.read())
     f.close()
-    net = CustomNN(structure=ttt_sa)
+    net = CustomNN(structure=ttt_dyn)
 
     print()
     print(net)
     print("OUTPUT SHAPES:")
     output = net((torch.zeros((1, 64)), torch.zeros((1,), dtype=torch.int)))
+    print(output)
+    print(net.output_shape)
+
+    print("TESTING TTT dyn with player")
+    f = open(os.path.join(network_dir, 'net_configs', 'ttt_dyn_with_plyr.txt'), 'r')
+    ttt_dyn = ast.literal_eval(f.read())
+    f.close()
+    net = CustomNN(structure=ttt_dyn)
+
+    print()
+    print(net)
+    print("OUTPUT SHAPES:")
+    output = net((torch.zeros((1, 64)), torch.tensor([0]), torch.tensor([3])))
     print(output)
     print(net.output_shape)

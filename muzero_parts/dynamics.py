@@ -23,12 +23,14 @@ NOTE: muzero has no idea in general whether an abstract state is terminal, and w
     not an issue for fixed depth games
 """
 import numpy as np
+from networks.nn_from_config import CustomNN
+
 
 class Dynamics:
     def __init__(self):
         super().__init__()
 
-    def predict(self, state, action, mutate=False):
+    def predict(self, state, player, action, mutate=False):
         """
         :param state: current (abstract or true) state of game
         :param action: (abstract or true) game action
@@ -58,7 +60,7 @@ class PyspielDynamics(Dynamics):
     def __init__(self):
         super().__init__()
 
-    def predict(self, state, action, mutate=False):
+    def predict(self, state, player, action, mutate=False):
         if mutate:
             new_state = state
             new_state.apply_action(action)
@@ -67,21 +69,66 @@ class PyspielDynamics(Dynamics):
         return new_state, np.array(new_state.returns()), new_state.current_player(), new_state.is_terminal()
 
 
-if __name__ == '__main__':
-    import pyspiel
-    import numpy as np
+class LearnedDynamics(Dynamics):
+    """
+    assumes state is a tensor
+    uses a neural network to make a map (state, action) -> (next state, returns)
+    assume player always increases mod num_players
+    always predicts terminal=False
+    """
 
-    g = pyspiel.load_game('universal_poker', {k: pyspiel.GameParameter(v) for k, v in (
-        ('numPlayers', 3),
-        ('stack', "12 12 12"),
-        ('blind', "1 1 1"),
-    )})
+    def __init__(self, network_structure, num_players=2):
+        """
+        :param network_structure:
+            produces a network (see nn_from_config) that returns (next state, returns)
+            input must be a tuple (state, action) or (state, player, action)
+        """
+        super().__init__()
+        self.network = CustomNN(structure=network_structure)
+        self.input_shape = network_structure['input_shape']
+        self.num_players = num_players
+
+    def predict(self, state, player, action, mutate=False):
+        if len(self.input_shape) == 2:  # (state, action)
+            new_state, returns = self.network((state, action))
+        elif len(self.input_shape) == 3:  # (state, player, action)
+            new_state, returns = self.network((state, player, action))
+        else:
+            raise NotImplementedError
+        return new_state, returns, (1 + player)%self.num_players, False
+
+
+if __name__ == '__main__':
+    import pyspiel, os, ast, torch
+
+    g = pyspiel.load_game('universal_poker', {
+        'numPlayers': 3,
+        'stack': "12 12 12",
+        'blind': "1 1 1",
+    })
     state = g.new_initial_state()
+    player = state.current_player()
     terminal = False
     dynamics = PyspielDynamics()
     sum_returns = np.zeros(3)
     while not terminal:
-        state, returns, player, terminal = dynamics.predict(state=state, action=np.random.choice(state.legal_actions()), mutate=True)
+        state, returns, player, terminal = dynamics.predict(state=state, player=player,
+                                                            action=np.random.choice(state.legal_actions()), mutate=True)
         sum_returns += returns
         print(state)
     print(sum_returns)
+    f = open(os.path.join(os.path.dirname(os.path.dirname(__file__)),
+                          'networks', 'net_configs', 'ttt_dyn_with_plyr.txt'
+                          ), 'r')
+    structure = ast.literal_eval(f.read())
+    f.close()
+    dynamics = LearnedDynamics(network_structure=structure)
+    print(dynamics.network.output_shape)
+    player = torch.tensor([0])
+    state = torch.zeros(1, 64)
+    for _ in range(10):
+        state, returns, player, terminal = dynamics.predict(state=state,
+                                                            player=player,
+                                                            action=torch.tensor([1]), )
+        print(state, returns,player)
+

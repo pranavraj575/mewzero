@@ -1,0 +1,93 @@
+{ # same as ttt_dyn except conditions on player
+  # computation is done with a function f(s,p,a)
+  # updates state by predicting a residual: s' = s + f_s(f(s,p,a))
+  # estimates returns = f_r(f(s,p,a))
+    'input_shape': ((64,), (1,), (1,)),
+    'layers':
+        [
+            {  # this layer will turn this into (state, state, player embedding, action embedding)
+                'type': 'parallel',
+                'extract_sub_tuples':[0],
+                'branches':
+                [
+                    [
+                        {
+                          'type':'split',
+                          'branches':[None, None] # copy state into two branches, [[],[]] would also work
+                        },
+                    ],
+                    [
+                        { # produce 2 dimensional player embedding
+                            'type':'embedding',
+                            'num_embeddings':2,
+                            'embedding_dim':2,
+                        },
+                    ],
+                    [
+                        { # produce 16 dimensional action embedding
+                            'type':'embedding',
+                            'num_embeddings':9,
+                            'embedding_dim':16,
+                        },
+                    ],
+                ]
+            },
+            { # concatenate (one state, player, action), this becomes (state, state player action)
+                'type':'parallel',
+                'combination':'concat',
+                'combined_idxs':[1,2,3],
+            },
+            { # now produces (state, f(state player action), f(state player action))
+                'type':'parallel',
+                'combination':'tuple',
+                'extract_sub_tuples':[1],
+                'branches':
+                [
+                    [],
+                    [ # defines the f function, and copies it twice at the end
+                        {
+                            'type':'linear',
+                            'out_features':128,
+                            'bias':True,
+                        },
+                        {'type': 'relu'},
+                        {
+                            'type':'linear',
+                            'out_features':128,
+                            'bias':True,
+                        },
+                        {'type': 'relu'},
+                        {
+                          'type':'split',
+                          'branches':[None, None]
+                        },
+                    ],
+                ]
+            },
+            { # produces (state + f_s(f(state player action)), f_r(f(state player action)))
+                'type':'parallel',
+                'combination':'sum',
+                'combined_idxs':[0,1],
+                'idx_of_combination':0,
+                'branches':
+                [
+                    None, # identity for state
+                    [ # f_s is a linear map into the dimensions of the state
+                        {
+                            'type':'linear',
+                            'out_features':64,
+                            'bias':True,
+                        },
+                    ],
+                    [ # f_r is a linear map, then a tanh layer to force output on [-1,1]
+                        {
+                            'type':'linear',
+                            'out_features':2,
+                            'bias':True,
+                        },
+                        {'type':'tanh'}
+                    ]
+                ]
+            }
+        ]
+}

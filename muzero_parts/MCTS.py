@@ -155,6 +155,7 @@ class AbsMCTS:
         new_state = child.data.get('state', None)
         if new_state is None:
             new_state, returns, next_player, _ = dynamics.predict(state=state,
+                                                                  player=node.data['player'],
                                                                   action=self.get_action(node, state=state, action_idx=action_idx),
                                                                   mutate=False)
         v = self.search(node=child, state=new_state, dynamics=dynamics, depth=depth - 1)
@@ -238,13 +239,13 @@ class MCTS(AbsMCTS):
         else:
             return np.any(node.data['Nsa'] == 0)
 
-    def simulate_rollout(self, state, dynamics: Dynamics):
+    def simulate_rollout(self, state, player, dynamics: Dynamics):
         terminal = False
         value = 0  # accumulate returns along path, though this is usually just one return at terminal
         # value can end up being a np array, depending on the type of returns
         while not terminal:
             action = np.random.choice(self.get_legal_actions(state))
-            state, returns, next_player, terminal = dynamics.predict(state=state, action=action, mutate=False)
+            state, returns, next_player, terminal = dynamics.predict(state=state, player=player, action=action, mutate=False)
             value += returns
         return value
 
@@ -259,7 +260,7 @@ class MCTS(AbsMCTS):
 
         action_idx = np.random.choice(zeros)
         action = self.get_action(node, state=state, action_idx=action_idx)
-        new_state, returns, next_player, terminal = dynamics.predict(state=state, action=action, mutate=False)
+        new_state, returns, next_player, terminal = dynamics.predict(state=state, player=node.data['player'], action=action, mutate=False)
         leaf = self.make_leaf_node(state=new_state,
                                    player=next_player,
                                    parent=node,
@@ -270,7 +271,7 @@ class MCTS(AbsMCTS):
         if terminal:
             value = returns
         else:
-            value = self.simulate_rollout(state=new_state, dynamics=dynamics)
+            value = self.simulate_rollout(state=new_state, player=next_player, dynamics=dynamics)
         return leaf, value
 
     def select_action_idx(self, node, state):
@@ -355,7 +356,7 @@ class AlphaZeroMCTS(MCTS):
         else:
             action_idx = np.argmax((prior + 1)*(node.data['Nsa'] == 0))
         action = self.get_action(node, state=state, action_idx=action_idx)
-        new_state, returns, next_player, terminal = dynamics.predict(state=state, action=action, mutate=False)
+        new_state, returns, next_player, terminal = dynamics.predict(state=state, player=node.data['player'], action=action, mutate=False)
         leaf = self.make_leaf_node(state=new_state,
                                    player=next_player,
                                    parent=node,

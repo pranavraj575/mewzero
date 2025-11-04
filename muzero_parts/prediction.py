@@ -53,16 +53,16 @@ class MuZeroPrediction(Prediction):
     """
     finite_action_space = True
 
-    def __init__(self, network_config, representation: Representation = None):
+    def __init__(self, network_structure, representation: Representation = None):
         """
-        :param network_config:
+        :param network_structure:
             produces a network (see nn_from_config) that returns (policy, value)
             this parameter will imply the num actions, as this will be the size of the policy vector
         """
         super().__init__(representation=representation)
-        self.network = CustomNN(structure=network_config)
+        self.network = CustomNN(structure=network_structure)
         self.num_actions = self.network.output_shape[0]
-        self.unbatched_input_shape = network_config['input_shape']
+        self.unbatched_input_shape = network_structure['input_shape']
 
     def policy_value(self, states):
         if self.representation is None:
@@ -126,7 +126,7 @@ if __name__ == "__main__":
             },
         ]
     }
-    prediction_net = MuZeroPrediction(network_config=network_config)
+    prediction_net = MuZeroPrediction(network_structure=network_config)
     s = g.new_initial_state()
     while not s.is_terminal():
         if s.is_chance_node():

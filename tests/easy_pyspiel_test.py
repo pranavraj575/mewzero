@@ -40,7 +40,7 @@ network_config = {
     ]
 }
 
-prediction = MuZeroPrediction(network_config=network_config)
+prediction = MuZeroPrediction(network_structure=network_config)
 dynamics = PyspielDynamics()
 representation = PyspielObservationRepreseentation(game=game)
 action_enc_dec = IdentityActionEncDec()

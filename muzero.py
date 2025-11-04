@@ -38,7 +38,7 @@ def get_trajectory(initial_state, representation: Representation, dynamics: Dyna
                                                                   )
         action_idx = np.random.choice(np.arange(len(policy)), p=policy)
         action = mcts.get_action(node=root, state=state, action_idx=action_idx)
-        next_state, reward, next_player, terminal = dynamics.predict(state=state, action=action, mutate=False)
+        next_state, reward, next_player, terminal = dynamics.predict(state=state, player=player, action=action, mutate=False)
         traj_states.append(next_state)  # terminal state is added here on last iteration
         traj_players.append(player)
         traj_policies.append(policy)
@@ -124,7 +124,7 @@ if __name__ == '__main__':
     f = open(os.path.join(os.path.dirname(__file__), 'networks', 'net_configs', 'ttt_pred.txt'), 'r')
     network_config = ast.literal_eval(f.read())
     f.close()
-    prediction = MuZeroPrediction(network_config=network_config, representation=PyspielObservationRepreseentation(game=game))
+    prediction = MuZeroPrediction(network_structure=network_config, representation=PyspielObservationRepreseentation(game=game))
 
     mcts = AlphaZeroMCTS(num_players=game.num_players(),
                          prediction=prediction,
