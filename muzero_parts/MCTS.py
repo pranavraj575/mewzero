@@ -163,7 +163,7 @@ class AbsMCTS:
             self.backprop_childs_value(node.parent, node.data['parent_action_idx'], v)
         return v + node.data.get('returns', 0)
 
-    def get_mcts_policy_value(self, state, num_sims, dynamics: Dynamics, player=0, temp=1, root=None, depth=float('inf')):
+    def get_mcts_policy_value(self, state, num_sims, dynamics: Dynamics, player, temp=1, root=None, depth=float('inf')):
         """
         runs num_sims of MCTS search and returns the action probabilities (based on visits of root children)
         Args:
@@ -412,7 +412,7 @@ class MuZeroMCTS(AlphaZeroMCTS):
         leaf.data['state'] = state
         return leaf
 
-    def get_mcts_policy_value(self, state, num_sims, dynamics: Dynamics, legal_action_indices=None, player=0, temp=1, root=None, depth=float('inf')):
+    def get_mcts_policy_value(self, state, num_sims, dynamics: Dynamics, player, legal_action_indices=None, temp=1, root=None, depth=float('inf')):
         """
         :param state: ABSTRACT state!!!
         :param legal_action_indices: list of indices of legal actions

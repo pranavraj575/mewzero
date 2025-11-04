@@ -7,7 +7,7 @@ from muzero_parts.prediction import Prediction
 from muzero_parts.MCTS import AbsMCTS
 
 
-def get_trajectory(initial_state, representation: Representation, dynamics: Dynamics, mcts: AbsMCTS, player=0):
+def get_trajectory(initial_state, representation: Representation, dynamics: Dynamics, mcts: AbsMCTS, player):
     """
     until a certian depth
     :param initial_state:
