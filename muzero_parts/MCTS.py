@@ -5,7 +5,10 @@ from muzero_parts.dynamics import Dynamics
 from muzero_parts.representation import Representation
 from muzero_parts.prediction import Prediction
 
-
+def clean_vec(vector):
+    if torch.is_tensor(vector):
+        return vector.detach().cpu().numpy()
+    return vector
 class Node:
     # list of children, assumes actions are ordered as well
     children: list
@@ -342,8 +345,8 @@ class AlphaZeroMCTS(MCTS):
                                       parent=parent,
                                       parent_action_idx=parent_action_idx,
                                       terminal=terminal,
-                                      prior_policy=policy.detach().cpu().numpy(),
-                                      prior_value=value.detach().cpu().numpy(),
+                                      prior_policy=clean_vec(policy),
+                                      prior_value=clean_vec(value),
                                       **kwargs)
 
     def expand_node_and_sim_value(self, node, state, dynamics: Dynamics):
@@ -356,16 +359,19 @@ class AlphaZeroMCTS(MCTS):
         else:
             action_idx = np.argmax((prior + 1)*(node.data['Nsa'] == 0))
         action = self.get_action(node, state=state, action_idx=action_idx)
-        new_state, returns, next_player, terminal = dynamics.predict(state=state, player=node.data['player'], action=action, mutate=False)
+        new_state, returns, next_player, terminal = dynamics.predict(state=state,
+                                                                     player=torch.tensor([node.data['player']]),
+                                                                     action=torch.tensor([action]),
+                                                                     mutate=False)
         leaf = self.make_leaf_node(state=new_state,
                                    player=next_player,
                                    parent=node,
                                    terminal=terminal,
-                                   returns=returns,
+                                   returns=clean_vec(returns),
                                    parent_action_idx=action_idx,
                                    )
         if terminal:
-            value = returns
+            value = clean_vec(returns)
         else:
             value = leaf.data['prior_value']  # use evaluation instead of a full rollout
         return leaf, value

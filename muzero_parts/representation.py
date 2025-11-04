@@ -5,6 +5,7 @@ if we are training in non-abstract spaces, this can be either the identity or an
 """
 import torch
 from torch import nn
+from networks.nn_from_config import CustomNN
 
 
 class Representation(nn.Module):
@@ -49,3 +50,41 @@ class PyspielObservationRepreseentation(Representation):
             return torch.tensor(state.observation_tensor()).reshape(state.get_game().observation_tensor_shape())
         else:
             return torch.tensor(state.observation_tensor()).reshape(self.obs_shape)
+
+
+class LearnedRepreseentation(Representation):
+    """
+    learns a representation of a tensor
+        assumes the input is always a batched tensor
+    """
+
+    def __init__(self, network_config):
+        super().__init__()
+        self.network = CustomNN(structure=network_config)
+
+    def encode(self, state):
+        return self.network(state)
+
+
+class ChainRepresentation(Representation):
+    def __init__(self, representation_list):
+        super().__init__()
+        self.reps = representation_list
+
+    def encode(self, state):
+        for rep in self.reps:
+            state = rep.encode(state)
+        return state
+
+
+if __name__ == '__main__':
+    import os, ast, pyspiel
+
+    g = pyspiel.load_game('tic_tac_toe')
+    f = open(os.path.join(os.path.dirname(os.path.dirname(__file__)), 'networks', 'net_configs', 'ttt_rep.txt'), 'r')
+    network_config = ast.literal_eval(f.read())
+    f.close()
+
+    rep = ChainRepresentation([PyspielObservationRepreseentation(game=g), LearnedRepreseentation(network_config=network_config)])
+    s = g.new_initial_state()
+    print(rep.encode(s))

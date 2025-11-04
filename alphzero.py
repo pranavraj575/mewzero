@@ -7,17 +7,24 @@ from muzero_parts.prediction import Prediction
 from muzero_parts.MCTS import AbsMCTS
 
 
-def get_trajectory(initial_state, representation: Representation, dynamics: Dynamics, mcts: AbsMCTS, player):
+def get_trajectory(initial_state,
+                   representation: Representation,
+                   true_dynamics: Dynamics,
+                   dynamics: Dynamics,
+                   mcts: AbsMCTS,
+                   player,
+                   ):
     """
     until a certian depth
     :param initial_state:
+    :param true_dynamics: used to enact the action in the true environment
     :param representation:
     :param dynamics:
     :return:
     """
-    state = representation.encode(initial_state)
-    terminal = False
-    traj_states = [state]  # len n+1 array of encoded states along path (including the terminal state, which has no associated policy/action)
+
+    traj_true_states = []  # len n array of states along path (not including the terminal state)
+    traj_states = []  # len n array of encoded states along path (not including the terminal state)
     traj_players = []  # len n array of players whose turn it is
     traj_policies = []  # len n array of MCTS policies from each state
     traj_actions = []  # len n array of actions taken
@@ -27,6 +34,10 @@ def get_trajectory(initial_state, representation: Representation, dynamics: Dyna
 
     traj_values = []  # len n array of MCTS root node values estimated at each state
     # in AZ paper, this is ignored, instead it learns based on the reward of the episode
+
+    true_state = initial_state
+    state = representation.encode(true_state)
+    terminal = False
     while not terminal:
         root, policy, value, actions = mcts.get_mcts_policy_value(state=state,
                                                                   num_sims=2000,
@@ -38,8 +49,11 @@ def get_trajectory(initial_state, representation: Representation, dynamics: Dyna
                                                                   )
         action_idx = np.random.choice(np.arange(len(policy)), p=policy)
         action = mcts.get_action(node=root, state=state, action_idx=action_idx)
-        next_state, reward, next_player, terminal = dynamics.predict(state=state, player=player, action=action, mutate=False)
-        traj_states.append(next_state)  # terminal state is added here on last iteration
+        next_true_state, reward, next_player, terminal = true_dynamics.predict(state=true_state, player=player, action=action, mutate=False)
+        next_state = representation.encode(next_true_state)
+
+        traj_true_states.append(true_state)
+        traj_states.append(state)
         traj_players.append(player)
         traj_policies.append(policy)
         traj_actions.append(action)
@@ -47,10 +61,12 @@ def get_trajectory(initial_state, representation: Representation, dynamics: Dyna
         traj_rewards.append(reward)
         traj_values.append(value)
 
-        state = next_state  # update state
+        # update state and player
+        true_state = next_true_state
+        state = next_state
         player = next_player
     return {
-        'initial_state': initial_state,
+        'traj_true_states': traj_true_states,
         'traj_states': traj_states,
         'traj_players': traj_players,
         'traj_policies': traj_policies,
@@ -118,7 +134,7 @@ if __name__ == '__main__':
     # effects appear less when searching from closer to root, potentially because the state is never reached
     # can def do something smarter, but this is fine for tests
     state.apply_action(0)
-    # state.apply_action(1)
+    state.apply_action(1)
     # state.apply_action(4)
     # state.apply_action(8)
     f = open(os.path.join(os.path.dirname(__file__), 'networks', 'net_configs', 'ttt_pred.txt'), 'r')
@@ -146,6 +162,7 @@ if __name__ == '__main__':
         trajs = get_trajectory(initial_state=state,
                                representation=Representation(),
                                dynamics=PyspielDynamics(),
+                               true_dynamics=PyspielDynamics(),
                                mcts=mcts,
                                player=state.current_player(),
                                )

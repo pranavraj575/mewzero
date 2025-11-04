@@ -130,5 +130,4 @@ if __name__ == '__main__':
         state, returns, player, terminal = dynamics.predict(state=state,
                                                             player=player,
                                                             action=torch.tensor([1]), )
-        print(state, returns,player)
-
+        print(state, returns, player)
