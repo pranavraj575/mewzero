@@ -6,6 +6,8 @@ setup(
     version='6.9.0',
     packages=find_packages(),
     install_requires=['numpy',
+                      'torch',
+                      'matplotlib',
                       ],
     license='Liscence to Krill',
 )

@@ -4,7 +4,7 @@
         [
             {
              'type':'repeat',
-             'times':3,
+             'times':2,
              'block':[
                {
                 'type':'linear',

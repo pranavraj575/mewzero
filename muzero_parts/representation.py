@@ -3,7 +3,7 @@ representation function to go from state to encoded abstract state
 if we are training in non-abstract spaces, this can be either the identity or an bijection
     i.e. we are using the full state as its own representation
 """
-import torch
+import torch, os
 from torch import nn
 from networks.nn_from_config import CustomNN
 
@@ -19,6 +19,14 @@ class Representation(nn.Module):
         :return: encoded state or encoded batch of states
         """
         return state
+
+    def save(self, save_dir):
+        if not os.path.exists(save_dir):
+            os.makedirs(save_dir)
+        torch.save(self.state_dict(), os.path.join(save_dir, 'net.pkl'))
+
+    def load(self, save_dir):
+        self.load_state_dict(torch.load(os.path.join(save_dir, 'net.pkl'), weights_only=True))
 
 
 class PyspielObservationRepreseentation(Representation):
@@ -69,7 +77,7 @@ class LearnedRepreseentation(Representation):
 class ChainRepresentation(Representation):
     def __init__(self, representation_list):
         super().__init__()
-        self.reps = representation_list
+        self.reps = nn.ModuleList(representation_list)
 
     def encode(self, state):
         for rep in self.reps:
@@ -78,7 +86,7 @@ class ChainRepresentation(Representation):
 
 
 if __name__ == '__main__':
-    import os, ast, pyspiel
+    import ast, pyspiel
 
     g = pyspiel.load_game('tic_tac_toe')
     f = open(os.path.join(os.path.dirname(os.path.dirname(__file__)), 'networks', 'net_configs', 'ttt_rep.txt'), 'r')
@@ -88,3 +96,5 @@ if __name__ == '__main__':
     rep = ChainRepresentation([PyspielObservationRepreseentation(game=g), LearnedRepreseentation(network_config=network_config)])
     s = g.new_initial_state()
     print(rep.encode(s))
+    print(rep)
+    print(list(rep.parameters()))

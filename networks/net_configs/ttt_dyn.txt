@@ -45,12 +45,6 @@
                         },
                         {'type': 'relu'},
                         {
-                            'type':'linear',
-                            'out_features':128,
-                            'bias':True,
-                        },
-                        {'type': 'relu'},
-                        {
                           'type':'split',
                           'branches':[None, None]
                         },

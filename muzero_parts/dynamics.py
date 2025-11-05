@@ -22,7 +22,7 @@ NOTE: muzero has no idea in general whether an abstract state is terminal, and w
         during training time "treat terminal states as absorbing" is what online posts say
     not an issue for fixed depth games
 """
-import numpy as np
+import torch, numpy as np, os
 from networks.nn_from_config import CustomNN
 
 
@@ -47,6 +47,13 @@ class Dynamics:
         raise NotImplementedError
 
     def consistency_loss(self, state_encoder, true_state, action, true_next_state, ):
+        pass
+
+    def save(self, save_dir):
+        if not os.path.exists(save_dir):
+            os.makedirs(save_dir)
+
+    def load(self, save_dir):
         pass
 
 
@@ -97,9 +104,18 @@ class LearnedDynamics(Dynamics):
             raise NotImplementedError
         return new_state, returns, (1 + player)%self.num_players, False
 
+    def save(self, save_dir):
+        super().save(save_dir)
+        self.network.state_dict()
+        torch.save(self.network.state_dict(), os.path.join(save_dir, 'net.pkl'))
+
+    def load(self, save_dir):
+        super().load(save_dir)
+        self.network.load_state_dict(torch.load(os.path.join(save_dir, 'net.pkl'), weights_only=True))
+
 
 if __name__ == '__main__':
-    import pyspiel, os, ast, torch
+    import pyspiel, ast
 
     g = pyspiel.load_game('universal_poker', {
         'numPlayers': 3,
@@ -123,6 +139,14 @@ if __name__ == '__main__':
     structure = ast.literal_eval(f.read())
     f.close()
     dynamics = LearnedDynamics(network_structure=structure)
+    save_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'output', 'test_save')
+    if not os.path.exists(save_dir):
+        os.makedirs(save_dir)
+    dynamics.save(os.path.join(save_dir, 'dyn_test'))
+    dynamics2 = LearnedDynamics(network_structure=structure)
+    dynamics2.load(os.path.join(save_dir, 'dyn_test'))
+    opt = torch.optim.Adam(dynamics2.network.parameters())
+    opt.zero_grad()
     print(dynamics.network.output_shape)
     player = torch.tensor([0])
     state = torch.zeros(1, 64)
@@ -130,4 +154,25 @@ if __name__ == '__main__':
         state, returns, player, terminal = dynamics.predict(state=state,
                                                             player=player,
                                                             action=torch.tensor([1]), )
-        print(state, returns, player)
+    result_1 = state, returns
+    state = torch.zeros(1, 64)
+    for _ in range(10):
+        state, returns, player, terminal = dynamics2.predict(state=state,
+                                                             player=player,
+                                                             action=torch.tensor([1]), )
+    result_2 = state, returns
+
+    loss = torch.mean(torch.square(returns))
+    loss.backward()
+    opt.step()
+
+    state = torch.zeros(1, 64)
+    for _ in range(10):
+        state, returns, player, terminal = dynamics2.predict(state=state,
+                                                             player=player,
+                                                             action=torch.tensor([1]), )
+    result_3 = state, returns
+
+    print(torch.equal(result_1[0], result_2[0]), torch.equal(result_1[1], result_2[1]))
+    print('expected false:', torch.equal(result_1[0], result_3[0]), torch.equal(result_1[1], result_3[1]))
+    print(result_2[1], result_3[1])
