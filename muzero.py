@@ -7,6 +7,9 @@ from muzero_parts.prediction import Prediction
 from muzero_parts.MCTS import MuZeroMCTS
 
 
+# device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+# no need to swap device, the majority of time is in data collection with MCTS
+
 def tensor_idx(s):
     if torch.is_tensor(s):
         return s
@@ -70,8 +73,7 @@ def get_trajectory(initial_state,
         traj_policies.append(policy)
 
         traj_actions.append(action)
-        # TODO: THIS
-        traj_avail_actions.append(root.data['legal_action_mask'])
+        traj_avail_actions.append(np.where(root.data['legal_action_mask'])[0])
         traj_rewards.append(reward)
         traj_values.append(value)
 
@@ -240,6 +242,7 @@ def train_prediction(prediction: Prediction, data, optim):
             policy, value = prediction.policy_value(states=state)
             policy = policy[:, avail_actions]
             policy = policy/torch.sum(policy)
+            targ_pol = targ_pol[avail_actions]
             loss = torch.mean(torch.square(value - torch.tensor(rewards))) - torch.sum(
                 torch.tensor(targ_pol)*torch.log(policy))
         mean_loss += loss
@@ -295,17 +298,14 @@ if __name__ == '__main__':
     cmp_mcts = MCTS(num_players=game.num_players(),
                     is_pyspiel=True,
                     )
-    buff_pred = ReplayBufferList(config={'tensor_tuple': False})
-    buff2 = ReplayBufferList(config={'tensor_tuple': False})
-    optim_pred = torch.optim.Adam(prediction.network.parameters())
-    optim2 = torch.optim.Adam(list(representation.parameters()) + list(learned_dynamics.network.parameters()))
+
     test_state = game.new_initial_state()
-    #test_state.apply_action(1)
-    #test_state.apply_action(0)
-    #test_state.apply_action(2)
+    # test_state.apply_action(1)
+    # test_state.apply_action(0)
+    # test_state.apply_action(2)
     for i in range(0):
-       test_state.apply_action(np.random.choice(test_state.legal_actions()))
-    root, corr_policy, corr_val, _ = cmp_mcts.get_mcts_policy_value(state=test_state, num_sims=2000,
+        test_state.apply_action(np.random.choice(test_state.legal_actions()))
+    root, corr_policy, corr_val, _ = cmp_mcts.get_mcts_policy_value(state=test_state, num_sims=5000,
                                                                     dynamics=true_dynamics,
                                                                     player=test_state.current_player())
 
@@ -325,8 +325,18 @@ if __name__ == '__main__':
 
 
     save_dir = os.path.join(os.path.dirname(__file__), 'output', 'mz_test')
-    T = 3000
-    if False:
+    T = 5000
+    if True:
+        buff_pred = ReplayBufferList(config={'tensor_tuple': False})
+        buff_rep_dyn = ReplayBufferList(config={'tensor_tuple': False})
+        optim_pred = torch.optim.Adam(prediction.network.parameters(),
+                                      weight_decay=.0001)
+        optim_rep_dyn = torch.optim.Adam(
+            list(representation.parameters()) + list(learned_dynamics.network.parameters()),
+            weight_decay=.0001)
+        # prediction.network.to(device)
+        # representation.to(device)
+        # learned_dynamics.network.to(device)
         i = 0
         for i in range(T):
             if not i%10:
@@ -341,17 +351,16 @@ if __name__ == '__main__':
                                    is_pyspiel=True,
                                    )
             data_pred = get_prediciton_training_data(trajs)
-            data2 = get_dynamics_training_data(trajs)
+            data_rep_dyn = get_dynamics_training_data(trajs)
             buff_pred.extend(data_pred)
-            buff2.extend(data2)
+            buff_rep_dyn.extend(data_rep_dyn)
             loss_pred = train_prediction(prediction=prediction, data=buff_pred.sample(), optim=optim_pred)
             loss2 = train_representation_dynamics(representation=representation,
                                                   dynamics=learned_dynamics,
-                                                  data=buff2.sample(),
-                                                  optim=optim2,
+                                                  data=buff_rep_dyn.sample(),
+                                                  optim=optim_rep_dyn,
                                                   sample_action=lambda s: torch.randint(0, 9, (1,)),
                                                   )
-
             print(i, 'loss prediciton:', loss_pred)
             print(i, 'loss rep/dynamics:', loss2)
             print(test_state)
