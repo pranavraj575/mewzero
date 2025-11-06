@@ -159,11 +159,13 @@ def get_dynamics_training_data(trajectory, state_conversion=None):
     return data
 
 
-def train_representation_dynamics(representation: Representation, dynamics: LearnedDynamics, data, optim, sample_action):
+def train_representation_dynamics(representation: Representation, dynamics: LearnedDynamics, data, optim,
+                                  sample_action):
     optim.zero_grad()
     mean_returns_loss = torch.tensor(0.)  # want returns to be close to the true returns
     mean_consistency_loss = torch.tensor(0.)  # want dynamics(encode(state),action) to be similar to encode(next_state)
-    mean_terminal_state_loss = torch.tensor(0.)  # if state is an encoding of a terminal state, we want dynamics(state,action) to have zero reward
+    mean_terminal_state_loss = torch.tensor(
+        0.)  # if state is an encoding of a terminal state, we want dynamics(state,action) to have zero reward
     t_ret = 0
     t_cons = 0
     t_ts = 0
@@ -209,7 +211,8 @@ def train_representation_dynamics(representation: Representation, dynamics: Lear
                 player=tensor_idx(next_player),
                 action=tensor_idx(sample_action(representation.encode(true_state))),
                 mutate=False)
-            terminal_state_loss = torch.mean(torch.square(returns)) + torch.mean(torch.square(bonus_state - terminal_state))
+            terminal_state_loss = torch.mean(torch.square(returns)) + torch.mean(
+                torch.square(bonus_state - terminal_state))
             mean_terminal_state_loss += terminal_state_loss
             t_ts += 1
 
@@ -237,7 +240,8 @@ def train_prediction(prediction: Prediction, data, optim):
             policy, value = prediction.policy_value(states=state)
             policy = policy[:, avail_actions]
             policy = policy/torch.sum(policy)
-            loss = torch.mean(torch.square(value - torch.tensor(rewards))) - torch.sum(torch.tensor(targ_pol)*torch.log(policy))
+            loss = torch.mean(torch.square(value - torch.tensor(rewards))) - torch.sum(
+                torch.tensor(targ_pol)*torch.log(policy))
         mean_loss += loss
         t += 1
     mean_loss = mean_loss/t
@@ -250,7 +254,8 @@ if __name__ == '__main__':
     import pyspiel
     import ast, os
     from muzero_parts.dynamics import PyspielDynamics, LearnedDynamics
-    from muzero_parts.representation import PyspielObservationRepreseentation, ChainRepresentation, LearnedRepreseentation
+    from muzero_parts.representation import PyspielObservationRepreseentation, ChainRepresentation, \
+        LearnedRepreseentation
     from muzero_parts.prediction import MuZeroPrediction
     from muzero_parts.MCTS import AlphaZeroMCTS, MCTS
     from storage.replay_buffer import ReplayBufferList
@@ -295,12 +300,13 @@ if __name__ == '__main__':
     optim_pred = torch.optim.Adam(prediction.network.parameters())
     optim2 = torch.optim.Adam(list(representation.parameters()) + list(learned_dynamics.network.parameters()))
     test_state = game.new_initial_state()
-    # test_state.apply_action(1)
-    # test_state.apply_action(0)
-    # test_state.apply_action(2)
-    # for i in range(4):
-    #    test_state.apply_action(np.random.choice(test_state.legal_actions()))
-    root, corr_policy, corr_val, _ = cmp_mcts.get_mcts_policy_value(state=test_state, num_sims=2000, dynamics=true_dynamics,
+    #test_state.apply_action(1)
+    #test_state.apply_action(0)
+    #test_state.apply_action(2)
+    for i in range(0):
+       test_state.apply_action(np.random.choice(test_state.legal_actions()))
+    root, corr_policy, corr_val, _ = cmp_mcts.get_mcts_policy_value(state=test_state, num_sims=2000,
+                                                                    dynamics=true_dynamics,
                                                                     player=test_state.current_player())
 
 
@@ -319,9 +325,10 @@ if __name__ == '__main__':
 
 
     save_dir = os.path.join(os.path.dirname(__file__), 'output', 'mz_test')
-    if True:
+    T = 3000
+    if False:
         i = 0
-        for i in range(3000):
+        for i in range(T):
             if not i%10:
                 save(representation, dynamics=learned_dynamics, prediciton=prediction,
                      folder=os.path.join(save_dir, str(i)))
@@ -361,16 +368,21 @@ if __name__ == '__main__':
 
     print('true value:', corr_val)
     d = []
-    for i in range(4, 1000, 5):
-        load(represenation=representation, dynamics=learned_dynamics, prediciton=prediction,
-             folder=os.path.join(save_dir, str(i)))
-        pol, val = prediction.policy_value(representation.encode(test_state))
-        d.append(val.flatten()[0].detach().cpu().item())
-        print(val)
+    Ts = []
+    for t in range(T):
+        path = os.path.join(save_dir, str(t))
+        if os.path.exists(path):
+            Ts.append(t)
+            load(represenation=representation, dynamics=learned_dynamics, prediciton=prediction,
+                 folder=path)
+            pol, val = prediction.policy_value(representation.encode(test_state))
+            d.append(val.flatten()[0].detach().cpu().item())
+            print(val)
     print('true value:', corr_val)
     print(test_state)
-    plt.plot(range(4, 1000, 5), d)
-    plt.plot([4, 999], (corr_val[0], corr_val[0]), linestyle='--')
+    print()
+    plt.plot(Ts, d)
+    plt.plot((Ts[0], Ts[-1]), (corr_val[0], corr_val[0]), linestyle='--')
     for i in range(9):
         action = np.random.choice(test_state.legal_actions())
         state, rewards, next_player, _ = learned_dynamics.predict(state=representation.encode(test_state),
@@ -379,7 +391,8 @@ if __name__ == '__main__':
         pol, val = prediction.policy_value(state)
         print('value estimate', val.detach().cpu().flatten().numpy())
         print('dynamics returns', rewards.detach().cpu().flatten().numpy())
-        print('state difference', torch.mean(torch.square(representation.encode(test_state) - state)).detach().cpu().numpy())
+        print('state difference',
+              torch.mean(torch.square(representation.encode(test_state) - state)).detach().cpu().numpy())
         test_state.apply_action(action)
         print(test_state)
         if test_state.is_terminal():
