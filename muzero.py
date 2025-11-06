@@ -345,8 +345,8 @@ if __name__ == '__main__':
                                                   sample_action=lambda s: torch.randint(0, 9, (1,)),
                                                   )
 
-            print(i, 'mean loss prediciton:', loss_pred)
-            print(i, 'mean loss rep/dynamics:', loss2)
+            print(i, 'loss prediciton:', loss_pred)
+            print(i, 'loss rep/dynamics:', loss2)
             print(test_state)
             pol, val = prediction.policy_value(representation.encode(test_state))
             pol = pol.flatten().detach()[test_state.legal_actions()]
