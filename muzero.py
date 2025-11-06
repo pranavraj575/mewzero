@@ -161,11 +161,12 @@ def get_dynamics_training_data(trajectory, state_conversion=None):
 
 def train_representation_dynamics(representation: Representation, dynamics: LearnedDynamics, data, optim, sample_action):
     optim.zero_grad()
-    mean_returns_loss = 0.  # want returns to be close to the true returns
-    mean_consistency_loss = 0.  # want dynamics(encode(state),action) to be similar to encode(next_state)
-    mean_terminal_state_loss = 0.  # if state is an encoding of a terminal state, we want dynamics(state,action) to have zero reward
-    t = 0
+    mean_returns_loss = torch.tensor(0.)  # want returns to be close to the true returns
+    mean_consistency_loss = torch.tensor(0.)  # want dynamics(encode(state),action) to be similar to encode(next_state)
+    mean_terminal_state_loss = torch.tensor(0.)  # if state is an encoding of a terminal state, we want dynamics(state,action) to have zero reward
+    t_ret = 0
     t_cons = 0
+    t_ts = 0
     for true_state, true_next_state, traj_players, traj_actions, traj_rewards in data:
         state = representation.encode(true_state)
         # pred_traj_players=[]
@@ -182,8 +183,7 @@ def train_representation_dynamics(representation: Representation, dynamics: Lear
                            for r, rp in zip(traj_rewards, pred_traj_returns))/len(pred_traj_returns)
         mean_returns_loss += returns_loss
 
-        mean_consistency_loss += returns_loss
-        t += 1
+        t_ret += 1
         if true_next_state is not None:
             pred_next_state, _, _, _ = dynamics.predict(
                 state=representation.encode(true_state),
@@ -211,14 +211,17 @@ def train_representation_dynamics(representation: Representation, dynamics: Lear
                 mutate=False)
             terminal_state_loss = torch.mean(torch.square(returns)) + torch.mean(torch.square(bonus_state - terminal_state))
             mean_terminal_state_loss += terminal_state_loss
+            t_ts += 1
 
-    mean_returns_loss = mean_returns_loss/t
+    mean_returns_loss = mean_returns_loss/t_ret
     if t_cons > 0:
         mean_consistency_loss = mean_consistency_loss/t_cons
-    loss = mean_returns_loss + mean_consistency_loss
+    if t_ts > 0:
+        mean_terminal_state_loss = mean_terminal_state_loss/t_ts
+    loss = mean_returns_loss + mean_consistency_loss + mean_terminal_state_loss
     loss.backward()
     optim.step()
-    return mean_returns_loss.item()
+    return mean_returns_loss.item(), mean_consistency_loss.item(), mean_terminal_state_loss.item()
 
 
 def train_prediction(prediction: Prediction, data, optim):
@@ -316,11 +319,12 @@ if __name__ == '__main__':
 
 
     save_dir = os.path.join(os.path.dirname(__file__), 'output', 'mz_test')
-    if False:
-        save(representation, dynamics=learned_dynamics, prediciton=prediction,
-             folder=os.path.join(save_dir, str(0)))
-
-        for i in range(1000):
+    if True:
+        i = 0
+        for i in range(3000):
+            if not i%10:
+                save(representation, dynamics=learned_dynamics, prediciton=prediction,
+                     folder=os.path.join(save_dir, str(i)))
             trajs = get_trajectory(initial_state=state,
                                    representation=representation,
                                    true_dynamics=true_dynamics,
@@ -351,9 +355,8 @@ if __name__ == '__main__':
             print('true policy:', corr_policy)
             print('pred value:', val)
             print('true value:', corr_val)
-            if not (i + 1)%5:
-                save(representation, dynamics=learned_dynamics, prediciton=prediction,
-                     folder=os.path.join(save_dir, str(i)))
+        save(representation, dynamics=learned_dynamics, prediciton=prediction,
+             folder=os.path.join(save_dir, str(i + 1)))
     import matplotlib.pyplot as plt
 
     print('true value:', corr_val)
@@ -373,18 +376,21 @@ if __name__ == '__main__':
         state, rewards, next_player, _ = learned_dynamics.predict(state=representation.encode(test_state),
                                                                   player=torch.tensor([test_state.current_player()]),
                                                                   action=torch.tensor([action]))
-
-        print(rewards.detach().cpu().flatten().numpy())
-        print(torch.mean(torch.square(representation.encode(test_state) - state)).detach().cpu().numpy())
+        pol, val = prediction.policy_value(state)
+        print('value estimate', val.detach().cpu().flatten().numpy())
+        print('dynamics returns', rewards.detach().cpu().flatten().numpy())
+        print('state difference', torch.mean(torch.square(representation.encode(test_state) - state)).detach().cpu().numpy())
         test_state.apply_action(action)
         print(test_state)
         if test_state.is_terminal():
             bonus_state, rewards, _, _ = learned_dynamics.predict(state=state,
                                                                   player=torch.tensor([next_player]),
                                                                   action=torch.tensor([action]))
-            print('terminal')
-            print(torch.mean(torch.square(bonus_state - state)).detach().cpu().numpy())
-            print(rewards.detach().cpu().flatten().numpy())
+            pol, val = prediction.policy_value(bonus_state)
+            print('post terminal')
+            print('state difference', torch.mean(torch.square(bonus_state - state)).detach().cpu().numpy())
+            print('dynamic returns', rewards.detach().cpu().flatten().numpy())
+            print('value estimate', val.detach().cpu().flatten().numpy())
 
         print()
         if test_state.is_terminal():
