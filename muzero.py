@@ -303,7 +303,7 @@ if __name__ == '__main__':
     # test_state.apply_action(1)
     # test_state.apply_action(0)
     # test_state.apply_action(2)
-    for i in range(0):
+    for i in range(3):
         test_state.apply_action(np.random.choice(test_state.legal_actions()))
     root, corr_policy, corr_val, _ = cmp_mcts.get_mcts_policy_value(state=test_state, num_sims=5000,
                                                                     dynamics=true_dynamics,
@@ -325,8 +325,8 @@ if __name__ == '__main__':
 
 
     save_dir = os.path.join(os.path.dirname(__file__), 'output', 'mz_test')
-    T = 5000
-    if True:
+    T = 2200
+    if False:
         buff_pred = ReplayBufferList(config={'tensor_tuple': False})
         buff_rep_dyn = ReplayBufferList(config={'tensor_tuple': False})
         optim_pred = torch.optim.Adam(prediction.network.parameters(),
@@ -376,9 +376,10 @@ if __name__ == '__main__':
     import matplotlib.pyplot as plt
 
     print('true value:', corr_val)
+    print('true pol:', corr_policy)
     d = []
     Ts = []
-    for t in range(T):
+    for t in range(T + 1):
         path = os.path.join(save_dir, str(t))
         if os.path.exists(path):
             Ts.append(t)
@@ -386,19 +387,48 @@ if __name__ == '__main__':
                  folder=path)
             pol, val = prediction.policy_value(representation.encode(test_state))
             d.append(val.flatten()[0].detach().cpu().item())
-            print(val)
+            print(pol.flatten().detach().cpu().numpy())
+            print()
     print('true value:', corr_val)
+    print('true pol:', corr_policy)
     print(test_state)
     print()
     plt.plot(Ts, d)
     plt.plot((Ts[0], Ts[-1]), (corr_val[0], corr_val[0]), linestyle='--')
     for i in range(9):
+
         action = np.random.choice(test_state.legal_actions())
+        _, corr_policy, corr_val, _ = cmp_mcts.get_mcts_policy_value(state=test_state, num_sims=5000,
+                                                                     dynamics=true_dynamics,
+                                                                     player=test_state.current_player())
+        _, pol_with_search_dpth, val_with_search_dpth, _ = mcts.get_mcts_policy_value(
+            state=representation.encode(test_state).detach(), num_sims=2000,
+            dynamics=learned_dynamics, player=tensor_idx(test_state.current_player()),
+            legal_action_indices=test_state.legal_actions(),
+            depth=9,
+        )
+        _, pol_with_search, val_with_search, _ = mcts.get_mcts_policy_value(
+            state=representation.encode(test_state).detach(), num_sims=2000,
+            dynamics=learned_dynamics, player=tensor_idx(test_state.current_player()),
+            legal_action_indices=test_state.legal_actions(),
+            depth=9,
+        )
+        pol, val = prediction.policy_value(representation.encode(test_state))
         state, rewards, next_player, _ = learned_dynamics.predict(state=representation.encode(test_state),
-                                                                  player=torch.tensor([test_state.current_player()]),
-                                                                  action=torch.tensor([action]))
-        pol, val = prediction.policy_value(state)
-        print('value estimate', val.detach().cpu().flatten().numpy())
+                                                                  player=tensor_idx(test_state.current_player()),
+                                                                  action=tensor_idx(action))
+        print()
+        print(test_state)
+        print('true value:', corr_val)
+        print('value estimate(search+depth)', val_with_search)
+        print('value estimate(search)', val_with_search_dpth)
+        print('value estimate(no search)', val.detach().cpu().flatten().numpy())
+
+        print('true policy:',corr_policy)
+        print('policy(search+depth):', pol_with_search)
+        print('policy(search):', pol_with_search_dpth)
+        print('policy(no search):', pol.detach().cpu().flatten().numpy())
+        print('action:', action)
         print('dynamics returns', rewards.detach().cpu().flatten().numpy())
         print('state difference',
               torch.mean(torch.square(representation.encode(test_state) - state)).detach().cpu().numpy())
@@ -418,3 +448,4 @@ if __name__ == '__main__':
         if test_state.is_terminal():
             break
     plt.show()
+
