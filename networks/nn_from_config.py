@@ -10,6 +10,7 @@ import numpy as np
 import torch
 from torch import nn
 import ast
+import inspect
 
 
 def layer_from_config_dict(dic, input_shape=None, only_shape=False):
@@ -41,7 +42,8 @@ def layer_from_config_dict(dic, input_shape=None, only_shape=False):
     Returns:
         layer, output shape
     """
-    typ = dic['type'].lower()
+    Typ = dic['type']
+    typ = Typ.lower()
     layer = None
     if typ == 'identity':
         if not only_shape: layer = nn.Identity()
@@ -158,6 +160,13 @@ def layer_from_config_dict(dic, input_shape=None, only_shape=False):
             shape = (C, Hp, Wp)
         else:
             raise NotImplementedError
+    elif Typ in dir(nn):
+        assert 'output_shape' in dic  # needs this to calculate next layer, if we are using unknown torch layers
+        Layer = getattr(nn, Typ)
+        keywords = inspect.getfullargspec(Layer).args
+        kwargs = {k: dic[k] for k in keywords if k in dic}
+        layer = Layer(**kwargs)
+        shape = dic['output_shape']
     else:
         raise Exception('type unknown:', typ)
     return layer, shape
@@ -482,6 +491,8 @@ if __name__ == '__main__':
     print("OUTPUT SHAPES:")
     output = net(torch.zeros((1, 10)))
     print(output.shape)
+    print(net.output_shape)
+    quit()
 
     print("TESTING TTT")
     f = open(os.path.join(network_dir, 'net_configs', 'ttt_pred.txt'), 'r')
