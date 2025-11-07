@@ -66,6 +66,7 @@ def layer_from_config_dict(dic, input_shape=None, only_shape=False):
         'tanh': nn.Tanh,
         'softmax': nn.Softmax,
         'dropout': nn.Dropout,
+        'dropout1d': nn.Dropout1d,
         'dropout2d': nn.Dropout2d,
         'dropout3d': nn.Dropout3d,
     }

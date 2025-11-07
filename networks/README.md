@@ -1,6 +1,6 @@
 # Network generated from config file
 
-For examples of config dicts, look in net_configs.
+For examples of config dicts, look in `net_configs`.
 To generate a network given a dictionary, use `net = CustomNN(structure=config_dict)`.
 For example, `net = CustomNN(structure=ast.literal_eval(open(<config file>).read()))`
 
@@ -16,6 +16,10 @@ All layer dictionaries are REQUIRED to contain `type`: name of layer type.
 
 Supported torch layer types include `identity`, `relu`, `tanh`, `dropout`, `flatten`, `linear`, `cnn`, `maxpool`,
 `avgpool`.
+If a layer corresponds to a torch module, any keys that correspond to a keyword argument of that module will
+automatically get passed to that module.
+E.g. for `"type":"softmax"`, having the additional key `"dim":-1` will automatically pass this to create `torch.nn.Softmax(dim=-1)`.
+We describe keys that are required (and some optional ones) in detail below.
 
 There are also special types.
 `split` breaks the network into two parallel networks at a particular layer, and can combine the results.
@@ -25,36 +29,45 @@ map.
 
 ### `identity`, `relu`, `tanh`, `batchnorm1d`, `batchnorm2d`, `batchnorm3d`
 
-Identity, ReLU, Tanh, BatchNorm{_n_}d torch layers respectively.
+[Identity](https://docs.pytorch.org/docs/stable/generated/torch.nn.Identity.html), 
+[ReLU](https://docs.pytorch.org/docs/stable/generated/torch.nn.ReLU.html), 
+[Tanh](https://docs.pytorch.org/docs/stable/generated/torch.nn.Tanh.html),
+[BatchNorm{_n_}d](https://docs.pytorch.org/docs/stable/generated/torch.nn.BatchNorm2d.html)
+torch layers respectively.
 
 These layers require no additional dictionary keys, and do not change the network shape.
 
 ### `leakyrelu`
 
-LeakyReLU activation layer, has optional parameter `negative_slope` with default `"negative_slope":1e-2`.
+[LeakyReLU](https://docs.pytorch.org/docs/stable/generated/torch.nn.LeakyReLU.html) activation layer, has optional parameter `negative_slope` with default `"negative_slope":1e-2`.
 
 ### `softmax`
 
-The Softmax torch layer.
+The [Softmax](https://docs.pytorch.org/docs/stable/generated/torch.nn.Softmax.html) torch layer.
 
 * `dim`: optional parameter with default `"dim": -1`, probability of element to be zeroed
 
-### `dropout`, `dropout2d`
+### `dropout`, `dropout1d`, `dropout2d`, `dropout3d`
 
-The Dropout and Dropout2D torch layers respectively.
+The 
+[Dropout](https://docs.pytorch.org/docs/stable/generated/torch.nn.Dropout.html),
+[Dropout1D](https://docs.pytorch.org/docs/stable/generated/torch.nn.Dropout1d.html),
+[Dropout2D](https://docs.pytorch.org/docs/stable/generated/torch.nn.Dropout2d.html),
+and [Dropout3D](https://docs.pytorch.org/docs/stable/generated/torch.nn.Dropout3d.html) 
+torch layers respectively.
 
 * `p`: optional parameter with default `"p": 0.5`, probability of element to be zeroed
 
 ### `flatten`
 
-Flatten torch layer
+[Flatten](https://docs.pytorch.org/docs/stable/generated/torch.nn.modules.flatten.Flatten.html) torch layer
 
 * `start_dim`: optional parameter with default `"start_dim": 1`, represnents first dimension for flattening
 * `end_dim`: optional parameter with default `"end_dim": -1`, represents last dimension to be flattened
 
 ### `linear`
 
-Linear torch layer
+[Linear](https://docs.pytorch.org/docs/stable/generated/torch.nn.Linear.html) torch layer
 
 * `out_features`: REQUIRED parameter, the number of output features to transform input to
 * `bias`: optional parameter with default `"bias": True`, whether to include bias
@@ -63,14 +76,17 @@ Note that input_features is calculated automatically, and does not need to be sp
 
 ### `embedding`
 
-Embedding torch layer
+[Embedding](https://docs.pytorch.org/docs/stable/generated/torch.nn.Embedding.html) torch layer
 
 * `num_embeddings`: REQUIRED parameter, the number of unique embeddings to store
 * `embedding_dim`: REQUIRED parameter, the dimension of each embedding
 
 ### `cnn`, `maxpool`, `avgpool`
 
-Conv2d, MaxPool2d, AvgPool2d torch layers respectively
+[Conv2d](https://docs.pytorch.org/docs/stable/generated/torch.nn.Conv2d.html), 
+[MaxPool2d](https://docs.pytorch.org/docs/stable/generated/torch.nn.MaxPool2d.html),
+[AvgPool2d](https://docs.pytorch.org/docs/stable/generated/torch.nn.AvgPool2d.html)
+torch layers respectively
 
 * `out_channels`: REQUIRED FOR `cnn`, number of output channels of the layer.
 * `kernel_size`: REQUIRED parameter, the shape of the kernel passed to each torch layer
