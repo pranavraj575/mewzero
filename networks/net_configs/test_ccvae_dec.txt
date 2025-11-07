@@ -1,0 +1,55 @@
+{# pull 2d input out of a nd latent space, conditioned on state
+    'input_shape': ((3,),(4,)),
+    'layers':
+        [
+            {
+             'type':'parallel',
+             'combination':'concat',
+            },
+            {
+             'type':'linear',
+             'out_features':16,
+             'bias':True,
+            },
+            {
+                'type': 'leakyrelu',
+            },
+            {
+             'type':'repeat',
+             'times':2,
+             'block':
+             [
+                {
+                    'type':'split',
+                    'combination':'sum',
+                    'branches':
+                    [
+                        None,
+                        [
+                            {
+                             'type':'linear',
+                             'out_features':32,
+                             'bias':True,
+                            },
+                            {'type': 'batchnorm1d'},
+                            {'type': 'leakyrelu'},
+                            {
+                             'type':'linear',
+                             'out_features':16,
+                             'bias':True,
+                            },
+                            {'type': 'batchnorm1d'},
+                        ],
+                    ]
+                },
+                {'type': 'leakyrelu'},
+             ]
+            },
+
+            {
+             'type':'linear',
+             'out_features':2,
+             'bias':True,
+            },
+        ],
+}

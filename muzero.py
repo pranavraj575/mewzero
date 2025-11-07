@@ -325,7 +325,7 @@ if __name__ == '__main__':
 
 
     save_dir = os.path.join(os.path.dirname(__file__), 'output', 'mz_test')
-    T = 2200
+    T = 5000
     if False:
         buff_pred = ReplayBufferList(config={'tensor_tuple': False})
         buff_rep_dyn = ReplayBufferList(config={'tensor_tuple': False})
