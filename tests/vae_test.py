@@ -63,7 +63,7 @@ class VAE(nn.Module):
 
     def loss_function(self,
                       *args,
-                      **kwargs) -> dict:
+                      **kwargs):
         """
         Computes the VAE loss function.
         KL(N(\mu, \sigma), N(0, 1)) = \log \frac{1}{\sigma} + \frac{\sigma^2 + \mu^2}{2} - \frac{1}{2}
@@ -173,7 +173,7 @@ class CVAE(nn.Module):
 
     def loss_function(self,
                       *args,
-                      **kwargs) -> dict:
+                      **kwargs):
         """
         Computes the VAE loss function.
         KL(N(\mu, \sigma), N(0, 1)) = \log \frac{1}{\sigma} + \frac{\sigma^2 + \mu^2}{2} - \frac{1}{2}
@@ -195,7 +195,6 @@ class CVAE(nn.Module):
         return {'loss': loss, 'Reconstruction_Loss': recons_loss.detach(), 'KLD': -kld_loss.detach()}
 
     def sample(self,
-               num_samples: int,
                states,
                current_device=None, **kwargs):
         """
@@ -206,6 +205,7 @@ class CVAE(nn.Module):
         :param current_device: (Int) Device to run the model
         :return: (Tensor)
         """
+        num_samples = len(states)
         z = torch.randn(num_samples,
                         self.latent_dim)
         if current_device is not None:
@@ -216,8 +216,8 @@ class CVAE(nn.Module):
 
     def generate(self, x, **kwargs):
         """
-        Given an input image x, returns the reconstructed image
-        :param x: (Tensor) [B x *]
+        Given input (data, state), returns the reconstructed image
+        :param x: [B x *], [B x *']
         :return: (Tensor) [B x *]
         """
 
@@ -240,7 +240,7 @@ if __name__ == '__main__':
     cvae = CVAE(encoder_nn_config=enc_config, decoder_nn_config=dec_config)
     cvae.to(device)
     print(cvae)
-    print(cvae.sample(5, current_device=device, states=torch.rand(5, 4)))
+    print(cvae.sample(states=torch.rand(5, 4), current_device=device))
 
     a = time.time()
 
@@ -267,7 +267,7 @@ if __name__ == '__main__':
         all_losses.append({k: losses[k].detach().cpu().item() for k in losses})
     print(round(time.time() - a), 'seconds on device', device)
     true_sample, sampled_states = sample_distribution(n=128)
-    sample = cvae.sample(128, current_device=device, states=sampled_states).detach().cpu().numpy()
+    sample = cvae.sample(sampled_states, current_device=device).detach().cpu().numpy()
     plt.scatter(sample[:, 0], sample[:, 1], label='sampled from distribution')
     plt.scatter(true_sample[:, 0], true_sample[:, 1], label='true distribution')
     reconstructed = cvae.forward((true_sample, sampled_states))[0].detach().cpu().numpy()

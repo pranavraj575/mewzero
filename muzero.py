@@ -329,12 +329,12 @@ if __name__ == '__main__':
     if False:
         buff_pred = ReplayBufferList(config={'tensor_tuple': False})
         buff_rep_dyn = ReplayBufferList(config={'tensor_tuple': False})
-        optim_pred = torch.optim.Adam(prediction.network.parameters(),
+        optim_pred = torch.optim.Adam(prediction.parameters(),
                                       weight_decay=.0001)
         optim_rep_dyn = torch.optim.Adam(
             list(representation.parameters()) + list(learned_dynamics.network.parameters()),
             weight_decay=.0001)
-        # prediction.network.to(device)
+        # prediction.to(device)
         # representation.to(device)
         # learned_dynamics.network.to(device)
         i = 0
@@ -364,7 +364,7 @@ if __name__ == '__main__':
             print(i, 'loss prediciton:', loss_pred)
             print(i, 'loss rep/dynamics:', loss2)
             print(test_state)
-            pol, val = prediction.policy_value(representation.encode(test_state))
+            pol, val = prediction.policy_value(representation.encode_action(test_state))
             pol = pol.flatten().detach()[test_state.legal_actions()]
             val = val.flatten().detach().numpy()
             print('pred policy:', (pol/torch.sum(pol)).numpy())

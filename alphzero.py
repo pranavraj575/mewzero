@@ -150,7 +150,7 @@ if __name__ == '__main__':
                     is_pyspiel=True,
                     )
     buff = ReplayBufferList(config={'tensor_tuple': False})
-    optim = torch.optim.Adam(prediction.network.parameters())
+    optim = torch.optim.Adam(prediction.parameters())
     test_state = game.new_initial_state()
     test_state.apply_action(0)
     test_state.apply_action(1)
