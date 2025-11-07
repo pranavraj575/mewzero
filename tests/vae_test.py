@@ -250,6 +250,7 @@ if __name__ == '__main__':
         dists = torch.randint(0, len(modes), (n,))
         hot = torch.zeros(n, len(modes))
         hot[torch.arange(n), dists] = 1
+        hot = hot + torch.randn(hot.shape)/5
         return possible[dists, torch.arange(n), :].to(device), hot.to(device)
 
 
