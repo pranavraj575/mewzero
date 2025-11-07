@@ -1,0 +1,65 @@
+{# test pushing 2d input space into a nd latent space
+    'input_shape': (2,),
+    'layers':
+        [
+            {
+             'type':'linear',
+             'out_features':32,
+             'bias':True,
+            },
+            {
+                'type': 'leakyrelu',
+            },
+            {
+             'type':'repeat',
+             'times':8,
+             'block':
+             [
+                {
+                    'type':'split',
+                    'combination':'sum',
+                    'branches':
+                    [
+                        None,
+                        [
+                            {
+                             'type':'linear',
+                             'out_features':64,
+                             'bias':True,
+                            },
+                            {'type': 'batchnorm1d'},
+                            {'type': 'leakyrelu'},
+                            {
+                             'type':'linear',
+                             'out_features':32,
+                             'bias':True,
+                            },
+                            {'type': 'batchnorm1d'},
+                        ],
+                    ]
+                },
+                {'type': 'leakyrelu'},
+             ]
+            },
+            {
+             'type':'split',
+             'branches':# split into two branches, mean and log variance
+                [
+                    [
+                        {
+                         'type':'linear',
+                         'out_features':8,
+                         'bias':True,
+                        }
+                    ],
+                    [
+                        {
+                         'type':'linear',
+                         'out_features':8,
+                         'bias':True,
+                        }
+                    ],
+                ]
+            }
+        ],
+}

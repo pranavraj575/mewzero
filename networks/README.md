@@ -21,10 +21,13 @@ There are also special types.
 This is useful for different heads (i.e. policy, value network), or for resnets to sum a computation with the identity map.
 `repeat` makes k copies of a block.
 
-### `identity`, `relu`, `tanh`
-Identity, ReLU, Tanh torch layers respectively.
+### `identity`, `relu`, `tanh`, `batchnorm1d`, `batchnorm2d`, `batchnorm3d`
+Identity, ReLU, Tanh, BatchNorm{_n_}d torch layers respectively.
 
-These layers require no additional dictionary keys, and do not change the network shape
+These layers require no additional dictionary keys, and do not change the network shape.
+
+### `leakyrelu`
+LeakyReLU activation layer, has optional parameter `negative_slope` with default `"negative_slope":1e-2`.
 
 ### `softmax`
 The Softmax torch layer.

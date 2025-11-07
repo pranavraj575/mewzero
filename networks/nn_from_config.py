@@ -49,6 +49,14 @@ def layer_from_config_dict(dic, input_shape=None, only_shape=False):
     elif typ == 'relu':
         if not only_shape: layer = nn.ReLU()
         shape = input_shape
+    elif typ == 'leakyrelu':
+        if not only_shape:
+            negative_slope = dic.get('negative_slope', None)
+            if negative_slope is None:
+                layer = nn.LeakyReLU()
+            else:
+                layer = nn.LeakyReLU(negative_slope=negative_slope)
+        shape = input_shape
     elif typ == 'tanh':
         if not only_shape: layer = nn.Tanh()
         shape = input_shape
@@ -60,6 +68,15 @@ def layer_from_config_dict(dic, input_shape=None, only_shape=False):
         shape = input_shape
     elif typ == 'dropout2d':
         if not only_shape: layer = nn.Dropout2d(dic.get('p', .5))
+        shape = input_shape
+    elif typ == 'batchnorm1d':
+        if not only_shape: layer = nn.BatchNorm1d(num_features=input_shape[0])
+        shape = input_shape
+    elif typ == 'batchnorm2d':
+        if not only_shape: layer = nn.BatchNorm2d(num_features=input_shape[0])
+        shape = input_shape
+    elif typ == 'batchnorm3d':
+        if not only_shape: layer = nn.BatchNorm3d(num_features=input_shape[0])
         shape = input_shape
     elif typ == 'flatten':
         start_dim = dic.get('start_dim', 1)
@@ -94,7 +111,8 @@ def layer_from_config_dict(dic, input_shape=None, only_shape=False):
         else:
             shape = None
     elif typ == 'embedding':
-        if not only_shape: layer = nn.Embedding(num_embeddings=dic['num_embeddings'], embedding_dim=dic['embedding_dim'])
+        if not only_shape: layer = nn.Embedding(num_embeddings=dic['num_embeddings'],
+                                                embedding_dim=dic['embedding_dim'])
         shape = (dic['embedding_dim'],)
     # image stuff has annoying output shape calculation
     # only need to write it once
