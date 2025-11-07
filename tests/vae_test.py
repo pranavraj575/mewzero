@@ -112,7 +112,7 @@ class VAE(nn.Module):
         return self.forward(x)[0]
 
 
-class ContinuousConditionalVAE(nn.Module):
+class CVAE(nn.Module):
 
     def __init__(self,
                  encoder_nn_config,
@@ -127,7 +127,7 @@ class ContinuousConditionalVAE(nn.Module):
 
         ideally, for state s, data a, we have that for mu,var ~ encode(a,s), decode((z~(mu,var)),s) is close to a
         """
-        super(ContinuousConditionalVAE, self).__init__()
+        super(CVAE, self).__init__()
 
         self.encoder = CustomNN(encoder_nn_config)
         self.latent_dim = self.encoder.output_shape[0][0]
@@ -231,13 +231,13 @@ if __name__ == '__main__':
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     device = torch.device('cpu')
 
-    f = open(os.path.join(os.path.dirname(os.path.dirname(__file__)), 'networks', 'net_configs', 'test_ccvae_enc.txt'))
+    f = open(os.path.join(os.path.dirname(os.path.dirname(__file__)), 'networks', 'net_configs', 'test_cvae_enc.txt'))
     enc_config = ast.literal_eval(f.read())
     f.close()
-    f = open(os.path.join(os.path.dirname(os.path.dirname(__file__)), 'networks', 'net_configs', 'test_ccvae_dec.txt'))
+    f = open(os.path.join(os.path.dirname(os.path.dirname(__file__)), 'networks', 'net_configs', 'test_cvae_dec.txt'))
     dec_config = ast.literal_eval(f.read())
     f.close()
-    ccvae = ContinuousConditionalVAE(encoder_nn_config=enc_config, decoder_nn_config=dec_config)
+    ccvae = CVAE(encoder_nn_config=enc_config, decoder_nn_config=dec_config)
     ccvae.to(device)
     print(ccvae)
     print(ccvae.sample(5, current_device=device, states=torch.rand(5, 4)))
