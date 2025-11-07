@@ -31,14 +31,12 @@
                              'out_features':32,
                              'bias':True,
                             },
-                            {'type': 'batchnorm1d'},
                             {'type': 'leakyrelu'},
                             {
                              'type':'linear',
                              'out_features':16,
                              'bias':True,
                             },
-                            {'type': 'batchnorm1d'},
                         ],
                     ]
                 },

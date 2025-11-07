@@ -13,6 +13,17 @@ import ast
 import inspect
 
 
+def get_kwargs(Constructor, dic):
+    """
+    returns a kwargs dict to pass into Constructor
+    takes only keys from dic that belong in Constructor
+        if Constructor is called as Constructor(kwarg1=None,kwarg2=None) and dic={'fake_kwarg':c,'kwarg1':t},
+            output will be {'kwarg1':t}
+    """
+    keywords = inspect.getfullargspec(Constructor).args
+    return {k: dic[k] for k in keywords if k in dic}
+
+
 def layer_from_config_dict(dic, input_shape=None, only_shape=False):
     """
     returns nn layer from a layer config dict
@@ -45,48 +56,60 @@ def layer_from_config_dict(dic, input_shape=None, only_shape=False):
     Typ = dic['type']
     typ = Typ.lower()
     layer = None
-    if typ == 'identity':
-        if not only_shape: layer = nn.Identity()
-        shape = input_shape
-    elif typ == 'relu':
-        if not only_shape: layer = nn.ReLU()
-        shape = input_shape
-    elif typ == 'leakyrelu':
+
+    # these layers do not change the shape, and do not require any calculation of input dimension
+    # any additional kwargs are found by get_kwargs and passed to the torch constructor
+    easy_layers = {
+        'identity': nn.Identity,
+        'relu': nn.ReLU,
+        'leakyrelu': nn.LeakyReLU,
+        'tanh': nn.Tanh,
+        'softmax': nn.Softmax,
+        'dropout': nn.Dropout,
+        'dropout2d': nn.Dropout2d,
+        'dropout3d': nn.Dropout3d,
+    }
+
+    # stores the layer, and whether out_channels is required
+    # this is so we only have to compute the cnn output shape once
+    cnn_layers = {
+        'cnn': (nn.Conv2d, True),
+        'maxpool': (nn.MaxPool2d, False),
+        'avgpool': (nn.AvgPool2d, False),
+    }
+    if typ in easy_layers:
         if not only_shape:
-            negative_slope = dic.get('negative_slope', None)
-            if negative_slope is None:
-                layer = nn.LeakyReLU()
-            else:
-                layer = nn.LeakyReLU(negative_slope=negative_slope)
+            Layer = easy_layers[typ]
+            layer = Layer(**get_kwargs(Layer, dic))
         shape = input_shape
-    elif typ == 'tanh':
-        if not only_shape: layer = nn.Tanh()
-        shape = input_shape
-    elif typ == 'softmax':
-        if not only_shape: layer = nn.Softmax(dim=dic.get('dim', -1))
-        shape = input_shape
-    elif typ == 'dropout':
-        if not only_shape: layer = nn.Dropout(dic.get('p', .5))
-        shape = input_shape
-    elif typ == 'dropout2d':
-        if not only_shape: layer = nn.Dropout2d(dic.get('p', .5))
-        shape = input_shape
-    elif typ == 'batchnorm1d':
-        if not only_shape: layer = nn.BatchNorm1d(num_features=input_shape[0])
-        shape = input_shape
-    elif typ == 'batchnorm2d':
-        if not only_shape: layer = nn.BatchNorm2d(num_features=input_shape[0])
-        shape = input_shape
-    elif typ == 'batchnorm3d':
-        if not only_shape: layer = nn.BatchNorm3d(num_features=input_shape[0])
-        shape = input_shape
+    elif typ == 'linear':
+        # passes calculated shape into in_features, computes output shape
+        assert 'out_features' in dic, "REQUIRED argument out_features"
+        out_features = dic['out_features']
+        if not only_shape:
+            layer = nn.Linear(in_features=input_shape[-1],
+                              **get_kwargs(nn.Linear, dic),
+                              )
+        if input_shape is not None:
+            shape = (*(input_shape[:-1]),
+                     out_features,
+                     )
+        else:
+            shape = None
+    elif typ == 'batchnorm1d' or typ == 'batchnorm2d' or typ == 'batchnorm3d':
+        if not only_shape:
+            # index the correct layer type
+            Layer = [None, nn.BatchNorm1d, nn.BatchNorm2d, nn.BatchNorm3d][int(typ[-2])]
+            layer = Layer(num_features=input_shape[0], **get_kwargs(Layer, dic))
+        shape = input_shape  # shape doesnt change
     elif typ == 'flatten':
         start_dim = dic.get('start_dim', 1)
         end_dim = dic.get('end_dim', -1)
+        dic = dic.copy()
+        dic['start_dim'] = start_dim
+        dic['end_dim'] = end_dim
         if not only_shape:
-            layer = nn.Flatten(start_dim=start_dim,
-                               end_dim=end_dim,
-                               )
+            layer = nn.Flatten(**get_kwargs(nn.Flatten, dic))
         # INCLUSIVE of end dim
         if input_shape is not None:
             # convert to batched first to make this less annoying (+1s everywhere)
@@ -99,72 +122,48 @@ def layer_from_config_dict(dic, input_shape=None, only_shape=False):
             shape = shape[1:]
         else:
             shape = None
-    elif typ == 'linear':
-        out_features = dic['out_features']
-        if not only_shape:
-            layer = nn.Linear(in_features=input_shape[-1],
-                              out_features=out_features,
-                              bias=dic.get('bias', True),
-                              )
-        if input_shape is not None:
-            shape = (*(input_shape[:-1]),
-                     out_features,
-                     )
-        else:
-            shape = None
     elif typ == 'embedding':
-        if not only_shape: layer = nn.Embedding(num_embeddings=dic['num_embeddings'],
-                                                embedding_dim=dic['embedding_dim'])
+        assert 'num_embeddings' in dic and 'embedding_dim' in dic, "REQUIRED arguments num_embeddings and embedding_dim"
+        if not only_shape: layer = nn.Embedding(**get_kwargs(nn.Embedding, dic))
         shape = (dic['embedding_dim'],)
     # image stuff has annoying output shape calculation
     # only need to write it once
-    elif typ in ['cnn', 'maxpool', 'avgpool']:
-        (C, H, W) = input_shape
+    elif typ in cnn_layers:
+        dic = dic.copy()
+        Layer, requires_out_channels = cnn_layers[typ]
+        (in_channels, H, W) = input_shape
         kernel_size = dic['kernel_size']
         if type(kernel_size) == int: kernel_size = (kernel_size, kernel_size)
+        dic['kernel_size'] = kernel_size
+
         stride = dic.get('stride', 1)
         if type(stride) == int: stride = (stride, stride)
+        dic['stride'] = stride
+
         padding = dic.get('padding', 0)
-        if type(padding) == int: padding = (padding, padding)
+        if type(padding) == int:
+            padding = (padding, padding)
+        dic['padding'] = padding
+
+        # this is used in Conv2d
+        dic['in_channels'] = in_channels
 
         Hp, Wp = ((H + 2*padding[0] - kernel_size[0])//stride[0] + 1,
                   (W + 2*padding[1] - kernel_size[1])//stride[1] + 1,
                   )
-        if typ == 'cnn':
-            out_channels = dic['channels']
-            if not only_shape:
-                layer = nn.Conv2d(
-                    in_channels=C,
-                    out_channels=out_channels,
-                    kernel_size=kernel_size,
-                    stride=stride,
-                    padding=padding,
-                )
-            shape = (out_channels, Hp, Wp)
-        elif typ == 'maxpool':
-            if not only_shape:
-                layer = nn.MaxPool2d(
-                    kernel_size=kernel_size,
-                    stride=stride,
-                    padding=padding,
-                )
+        if requires_out_channels:
+            assert 'out_channels' in dic, "REQUIRED argument out_channels in " + typ + " layer"
 
-            shape = (C, Hp, Wp)
-        elif typ == 'avgpool':
-            if not only_shape:
-                layer = nn.AvgPool2d(
-                    kernel_size=kernel_size,
-                    stride=stride,
-                    padding=padding,
-                )
-            shape = (C, Hp, Wp)
+            out_channels = dic['out_channels']
         else:
-            raise NotImplementedError
+            out_channels = in_channels
+        if not only_shape:
+            layer = Layer(**get_kwargs(Layer, dic))
+        shape = (out_channels, Hp, Wp)
     elif Typ in dir(nn):
         assert 'output_shape' in dic  # needs this to calculate next layer, if we are using unknown torch layers
         Layer = getattr(nn, Typ)
-        keywords = inspect.getfullargspec(Layer).args
-        kwargs = {k: dic[k] for k in keywords if k in dic}
+        kwargs = get_kwargs(Layer, dic)
         layer = Layer(**kwargs)
         shape = dic['output_shape']
     else:
@@ -427,7 +426,7 @@ if __name__ == '__main__':
 
     print(layer_from_config_dict(
         dic={'type': 'CNN',
-             'channels': 64,
+             'out_channels': 64,
              'kernel_size': (9, 8),
              'stride': (3, 2),
              'padding': (0, 1),
@@ -489,7 +488,7 @@ if __name__ == '__main__':
     print()
     print(net)
     print("OUTPUT SHAPES:")
-    output = net(torch.zeros((1, 10)))
+    output = net(torch.zeros((4, 10)))
     print(output.shape)
     print(net.output_shape)
     quit()

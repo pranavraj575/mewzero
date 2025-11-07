@@ -25,12 +25,14 @@
                              'out_features':8,
                              'bias':False,
                             },
+                            {'type':'batchnorm1d'},
                             {'type':'relu'},
                             {
                              'type':'linear',
                              'out_features':8,
                              'bias':False,
                             },
+                            {'type':'batchnorm1d'},
                         ]
                     ],
                   },

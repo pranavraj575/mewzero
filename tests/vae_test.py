@@ -237,10 +237,10 @@ if __name__ == '__main__':
     f = open(os.path.join(os.path.dirname(os.path.dirname(__file__)), 'networks', 'net_configs', 'test_cvae_dec.txt'))
     dec_config = ast.literal_eval(f.read())
     f.close()
-    ccvae = CVAE(encoder_nn_config=enc_config, decoder_nn_config=dec_config)
-    ccvae.to(device)
-    print(ccvae)
-    print(ccvae.sample(5, current_device=device, states=torch.rand(5, 4)))
+    cvae = CVAE(encoder_nn_config=enc_config, decoder_nn_config=dec_config)
+    cvae.to(device)
+    print(cvae)
+    print(cvae.sample(5, current_device=device, states=torch.rand(5, 4)))
 
     a = time.time()
 
@@ -254,22 +254,30 @@ if __name__ == '__main__':
         return possible[dists, torch.arange(n), :].to(device), hot.to(device)
 
 
-    optim = torch.optim.Adam(ccvae.parameters(), weight_decay=.0001)
+    optim = torch.optim.Adam(cvae.parameters(), weight_decay=.0001)
     all_losses = []
 
     for _ in range(1000):
         optim.zero_grad()
-        batch = ccvae(input=sample_distribution(n=128, device=device))
-        losses = ccvae.loss_function(*batch)
+        batch = cvae(input=sample_distribution(n=128, device=device))
+        losses = cvae.loss_function(*batch)
         loss = losses['loss']
         loss.backward()
         optim.step()
         all_losses.append({k: losses[k].detach().cpu().item() for k in losses})
     print(round(time.time() - a), 'seconds on device', device)
     true_sample, sampled_states = sample_distribution(n=128)
-    sample = ccvae.sample(128, current_device=device, states=sampled_states).detach().cpu().numpy()
-    plt.scatter(sample[:, 0], sample[:, 1])
-    plt.scatter(true_sample[:, 0], true_sample[:, 1])
+    sample = cvae.sample(128, current_device=device, states=sampled_states).detach().cpu().numpy()
+    plt.scatter(sample[:, 0], sample[:, 1], label='sampled from distribution')
+    plt.scatter(true_sample[:, 0], true_sample[:, 1], label='true distribution')
+    reconstructed = cvae.forward((true_sample, sampled_states))[0].detach().cpu().numpy()
+    plt.scatter(reconstructed[:, 0], reconstructed[:, 1], label='reconstructed')
+    plt.legend()
+    plt.show()
+
+    resids = true_sample - reconstructed
+    plt.scatter(resids[:, 0], resids[:, 1])
+    plt.title('residuals')
     plt.show()
     for key in all_losses[0]:
         plt.plot([losses[key] for losses in all_losses], label=key)

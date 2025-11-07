@@ -72,6 +72,7 @@ Embedding torch layer
 
 Conv2d, MaxPool2d, AvgPool2d torch layers respectively
 
+* `out_channels`: REQUIRED FOR `cnn`, number of output channels of the layer.
 * `kernel_size`: REQUIRED parameter, the shape of the kernel passed to each torch layer
 * `stride`: optional parameter with default `"stride": (1,1)`, stride to use
 * `padding`: optional parameter with default `"padding": (0,0)`, padding to use
