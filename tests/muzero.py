@@ -267,21 +267,22 @@ if __name__ == '__main__':
     state = game.new_initial_state()
 
     true_dynamics = PyspielDynamics()
+    DIR=os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
     # learned dynamics uses abstract state
-    f = open(os.path.join(os.path.dirname(__file__), 'networks', 'net_configs', 'ttt_dyn_with_plyr.txt'), 'r')
+    f = open(os.path.join(DIR, 'networks', 'net_configs', 'ttt_dyn_with_plyr.txt'), 'r')
     network_config = ast.literal_eval(f.read())
     f.close()
     learned_dynamics = LearnedDynamics(network_structure=network_config)
 
     # prediction uses abstract state
-    f = open(os.path.join(os.path.dirname(__file__), 'networks', 'net_configs', 'ttt_abs_pred.txt'), 'r')
+    f = open(os.path.join(DIR, 'networks', 'net_configs', 'ttt_abs_pred.txt'), 'r')
     network_config = ast.literal_eval(f.read())
     f.close()
     prediction = MuZeroPrediction(network_structure=network_config)
 
     # representation goes from pyspiel state -> tensor
-    f = open(os.path.join(os.path.dirname(__file__), 'networks', 'net_configs', 'ttt_rep.txt'), 'r')
+    f = open(os.path.join(DIR, 'networks', 'net_configs', 'ttt_rep.txt'), 'r')
     network_config = ast.literal_eval(f.read())
     f.close()
     representation = ChainRepresentation(
@@ -324,7 +325,7 @@ if __name__ == '__main__':
         prediciton.load(os.path.join(folder, 'pred'))
 
 
-    save_dir = os.path.join(os.path.dirname(__file__), 'output', 'mz_test')
+    save_dir = os.path.join(DIR, 'output', 'mz_test')
     T = 5000
     if False:
         buff_pred = ReplayBufferList(config={'tensor_tuple': False})
