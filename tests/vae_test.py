@@ -230,11 +230,12 @@ if __name__ == '__main__':
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     device = torch.device('cpu')
+    DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
-    f = open(os.path.join(os.path.dirname(os.path.dirname(__file__)), 'networks', 'net_configs', 'test_cvae_enc.txt'))
+    f = open(os.path.join(DIR, 'networks', 'net_configs', 'test_cvae_enc.txt'))
     enc_config = ast.literal_eval(f.read())
     f.close()
-    f = open(os.path.join(os.path.dirname(os.path.dirname(__file__)), 'networks', 'net_configs', 'test_cvae_dec.txt'))
+    f = open(os.path.join(DIR, 'networks', 'net_configs', 'test_cvae_dec.txt'))
     dec_config = ast.literal_eval(f.read())
     f.close()
     cvae = CVAE(encoder_nn_config=enc_config, decoder_nn_config=dec_config)
@@ -284,10 +285,10 @@ if __name__ == '__main__':
     plt.legend()
     plt.show()
 
-    f = open(os.path.join(os.path.dirname(os.path.dirname(__file__)), 'networks', 'net_configs', 'test_vae_enc.txt'))
+    f = open(os.path.join(DIR, 'networks', 'net_configs', 'test_vae_enc.txt'))
     enc_config = ast.literal_eval(f.read())
     f.close()
-    f = open(os.path.join(os.path.dirname(os.path.dirname(__file__)), 'networks', 'net_configs', 'test_vae_dec.txt'))
+    f = open(os.path.join(DIR, 'networks', 'net_configs', 'test_vae_dec.txt'))
     dec_config = ast.literal_eval(f.read())
     f.close()
     vae = VAE(encoder_nn_config=enc_config, decoder_nn_config=dec_config)
